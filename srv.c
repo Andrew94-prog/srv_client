@@ -17,15 +17,13 @@
 //#define DBG
 
 #ifdef DBG
-#define pr_debug(str) printf(str)
+#define pr_debug(...) printf(__VA_ARGS__)
 #else
 #define pr_debug
 #endif
 
-#define BUF_SIZE                           1024
-#define CLINET_MSG_SIZE                     512
-#define STACK_SIZE                         8192
-#define CONN_TIMEOUT                          5
+#define READ_BUF_SIZE		1024
+#define WRITE_BUF_SIZE		1024
 
 atomic_ulong n_conn = 0;
 unsigned long prev_n_conn = 0;
@@ -39,44 +37,49 @@ static void sigchld_hand(int sig, siginfo_t *si, void *ctx)
 
 static void conn_routine(int new_socket)
 {
-    char buf[BUF_SIZE] = {0};
-    ssize_t to_read = CLINET_MSG_SIZE, to_write = CLINET_MSG_SIZE;
-    ssize_t n_read = 0, n_write = 0, count;
+    char recv_buf[READ_BUF_SIZE + 1] = {0};
+    char resp_buf[WRITE_BUF_SIZE] = "HTTP/1.1 200 OK\n"
+			"Content-Type: text/html; charset=UTF-8\n"
+			"Content-Length: 156\n"
+			"Date: Sat, 04 Oct 2025 14:51:00 GMT\n"
+			"Server: my_srv/1.0 (Ubuntu)\n"
+			"\n"
+			"<!DOCTYPE html>\n"
+			"<html>\n"
+			"<head>\n"
+			"    <title>Example Page</title>\n"
+			"</head>\n"
+			"<body>\n"
+			"    <h1>Welcome!</h1>\n"
+			"    <p>This is an example HTML page.</p>\n"
+			"</body>\n"
+			"</html>\n";
+    ssize_t to_read = READ_BUF_SIZE, to_write = WRITE_BUF_SIZE;
+    ssize_t n_read = 0, n_write = 0;
 
-    /* Read data from the client */
-    while (to_read) {
-        count = read(new_socket, (char *) buf + n_read, to_read);
-        if (count < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                continue;
-            } else {
-                perror("Srv: read from client failed");
-                exit(EXIT_FAILURE);
-            }
-        }
+    memset(recv_buf, 0, READ_BUF_SIZE + 1);
 
-        n_read += count;
-        to_read -= count;
+    pr_debug("Srv: try to read msg from client\n");
+
+    /* Read http message from client */
+    n_read = read(new_socket, (char *) recv_buf, to_read);
+    if (n_read < 0) {
+        perror("Srv: read from client failed");
+        pthread_exit((void *) EXIT_FAILURE);
+    } else if (n_read == 0) {
+        pr_debug("Empty message from client\n");
+        pthread_exit((void *) EXIT_SUCCESS);
     }
-    pr_debug("Srv: received fron client: %s\n", buf);
 
-    /* Send a response to the client */
-    while (to_write) {
-        count = write(new_socket, (char *) buf + n_write, to_write);
+    pr_debug("Srv: received from client: \n %s\n", recv_buf);
 
-        if (count < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                continue;
-            } else {
-                perror("Srv: write to client failed");
-                exit(EXIT_FAILURE);
-            }
-        }
-
-        n_write += count;
-        to_write -= count;
+    /* Send response to client */
+    n_write = write(new_socket, (char *) resp_buf + n_write, to_write);
+    if (n_write < 0) {
+         perror("Srv: write to client failed");
+         pthread_exit((void *) EXIT_FAILURE);
     }
-    pr_debug("Srv: Hello message sent to client\n");
+    pr_debug("Srv: http response sent to client\n");
 
     /* Close the socket for this client */
     close(new_socket);
