@@ -28,13 +28,6 @@
 atomic_ulong n_conn = 0;
 unsigned long prev_n_conn = 0;
 
-static void sigchld_hand(int sig, siginfo_t *si, void *ctx)
-{
-    int status;
-
-    while (waitpid(-1, &status, WNOHANG) > 0) {};
-}
-
 static void conn_routine(int new_socket)
 {
     char recv_buf[READ_BUF_SIZE + 1] = {0};
@@ -123,15 +116,9 @@ int main(int argc, char *argv[])
     struct timespec ts, te;
     unsigned long accept_time = 0, handle_time = 0;
     struct sockaddr_in address;
-    struct sigaction sa;
     time_t all_start, all_end;
     int opt = 1;
     int addrlen = sizeof(address);
-
-    sa.sa_flags = SA_SIGINFO;
-    sa.sa_sigaction = sigchld_hand;
-    sigemptyset(&sa.sa_mask);
-    sigaction(SIGCHLD, &sa, NULL);
 
     if (argc >= 2) {
         port = atoi(argv[1]);
