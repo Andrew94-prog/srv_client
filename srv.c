@@ -90,7 +90,7 @@ static void conn_routine(int new_socket)
 
 static void *thread_routine(void *arg)
 {
-    conn_routine((int) arg);
+    conn_routine((int) (long int) arg);
 
     return NULL;
 }
@@ -101,7 +101,7 @@ static void thread_new_conn(int new_socket)
     pthread_t th;
 
     do {
-        ret = pthread_create(&th, NULL, thread_routine, (void *) new_socket);
+        ret = pthread_create(&th, NULL, thread_routine, (void *) (long int) new_socket);
 
         if (ret) {
             if (errno == EAGAIN || errno == EINTR || errno == ECHILD) {
