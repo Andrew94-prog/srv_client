@@ -22,15 +22,17 @@
 //#define DBG
 
 #ifdef DBG
-#define pr_debug(args...) printf(args)
+#define pr_debug(...) printf(__VA_ARGS__)
 #else
 #define pr_debug
 #endif
 
-#define BUF_SIZE                           2048
-#define CLINET_MSG_SIZE                     512
-#define STACK_SIZE                         8192
-#define CONN_TIMEOUT                          5
+#define RECV_BUF_SIZE		1024
+#define SEND_BUF_SIZE		1024
+
+#define STACK_SIZE		8192
+#define CONN_TIMEOUT		5
+#define MAX_SEND_TRIES		3
 
 
 typedef struct Conn {
@@ -153,14 +155,41 @@ static int enable_async(int sock)
     return 0;
 }
 
+static void close_curr_conn(conn_queue_t *conn_queue)
+{
+    close(conn_queue->curr_conn->conn_sock);
+    conn_queue->curr_conn->completed = true;
+}
+
+static int swap_to_main_ctx(conn_queue_t *conn_queue)
+{
+     return swapcontext(&conn_queue->curr_conn->conn_ctx,
+                        &conn_queue->main_ctx);
+}
+
 static void conn_routine(int q_id)
 {
     conn_queue_t *conn_queue = &conn_queues[q_id];
-    char buf[BUF_SIZE] = {0};
-    ssize_t to_read = CLINET_MSG_SIZE, to_write = CLINET_MSG_SIZE;
-    ssize_t n_read = 0, n_write = 0, count;
-    time_t time_start, time_end, time_diff;
-    int ret;
+    char recv_buf[RECV_BUF_SIZE + 1] = {0};
+    char send_buf[SEND_BUF_SIZE + 1] = "HTTP/1.1 200 OK\n"
+			"Content-Type: text/html; charset=UTF-8\n"
+			"Content-Length: 156\n"
+			"Date: Sat, 04 Oct 2025 14:51:00 GMT\n"
+			"Server: my_srv_asyn/1.0 (Ubuntu)\n"
+			"\n"
+			"<!DOCTYPE html>\n"
+			"<html>\n"
+			"<head>\n"
+			"    <title>Example Page</title>\n"
+			"</head>\n"
+			"<body>\n"
+			"    <h1>Welcome!</h1>\n"
+			"    <p>This is an example HTML page.</p>\n"
+			"</body>\n"
+			"</html>\n";
+    ssize_t to_recv = RECV_BUF_SIZE, to_send = strlen(send_buf);
+    ssize_t n_recv = 0, n_send = 0, count;
+    int n_send_tries = 0, ret;
 
     pr_debug("Srv: %s(): start conn_sock = %d, conn = %p\n", __func__,
             conn_queue->curr_conn->conn_sock, conn_queue->curr_conn);
@@ -171,62 +200,48 @@ static void conn_routine(int q_id)
         exit(EXIT_FAILURE);
     }
 
-    /* Read data from the client */
-    time_diff = 0;
-    while (to_read) {
-        time_start = time(NULL);
-
-        count = read(conn_queue->curr_conn->conn_sock,
-                    (char *) buf + n_read, to_read);
-        if (count < 0) {
+    /* Receive http request from client */
+    while (1) {
+        n_recv = read(conn_queue->curr_conn->conn_sock,
+                        (char *) recv_buf, to_recv);
+        if (n_recv < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                pr_debug("Srv: %s(): read async, switch to main_ctx, "
-                        "conn_sock = %d, curr_conn = %p\n",
-                        __func__, conn_queue->curr_conn->conn_sock,
-                        conn_queue->curr_conn);
+                pr_debug("Srv: %s(): recv async, switch to main_ctx, "
+                         "conn_sock = %d, curr_conn = %p\n",
+                         __func__, conn_queue->curr_conn->conn_sock,
+                         conn_queue->curr_conn);
 
-                ret = swapcontext(&conn_queue->curr_conn->conn_ctx,
-                                &conn_queue->main_ctx);
+                ret = swap_to_main_ctx(conn_queue);
                 if (ret == 0) {
                     continue;
                 } else {
-                    perror("Srv: switch ctx from client read to main failed");
+                    perror("Srv: switch ctx from client recv to"
+                           " main_ctx failed with unknown error");
                     exit(EXIT_FAILURE);
                 }
             } else {
-                perror("Srv: read from client failed");
-                exit(EXIT_FAILURE);
+                perror("Srv: recv from client failed, close connection"
+                       " and switch back to main_ctx");
+                close_curr_conn(conn_queue);
+                swap_to_main_ctx(conn_queue);
             }
-        }
-
-        n_read += count;
-        to_read -= count;
-
-        time_end = time(NULL);
-
-        if (count == 0)
-            time_diff += (time_end - time_start);
-
-        if (time_diff > CONN_TIMEOUT) {
-            perror("Srv: connection timed out in read in conn routine, "
-                    "switch to main ctx");
-
-            close(conn_queue->curr_conn->conn_sock);
-            conn_queue->curr_conn->completed = true;
-            swapcontext(&conn_queue->curr_conn->conn_ctx,
-                        &conn_queue->main_ctx);
+        } else if (n_recv == 0) {
+            pr_debug("Srv: %s(): received empty buf from client,"
+                     " close connection and switch back to main_ctx\n",
+                     __func__);
+            close_curr_conn(conn_queue);
+            swap_to_main_ctx(conn_queue);
+        } else {
+            break;
         }
     }
-    pr_debug("Srv: %s(): received from client: %s\n", __func__, buf);
+    pr_debug("Srv: %s(): received from client: %s\n",
+             __func__, recv_buf);
 
-    /* Send a response to the client */
-    time_diff = 0;
-    while (to_write) {
-        time_start = time(NULL);
-
+    /* Send http response to client */
+    while (to_send && n_send_tries < MAX_SEND_TRIES) {
         count = write(conn_queue->curr_conn->conn_sock,
-                    (char *) buf + n_write, to_write);
-
+                    (char *) send_buf + n_send, to_send);
         if (count < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 pr_debug("Srv: %s(): write async, switch to main_ctx, "
@@ -234,50 +249,39 @@ static void conn_routine(int q_id)
                         __func__, conn_queue->curr_conn->conn_sock,
                         conn_queue->curr_conn);
 
-                ret = swapcontext(&conn_queue->curr_conn->conn_ctx,
-                                &conn_queue->main_ctx);
+                ret = swap_to_main_ctx(conn_queue);
                 if (ret == 0) {
                     continue;
                 } else {
-                    perror("Srv: switch ctx from client write to main failed");
+                    perror("Srv: switch ctx from client sendi to"
+                           " main_ctx failed with unknown error");
                     exit(EXIT_FAILURE);
                 }
             } else {
                 perror("Srv: write to client failed");
                 exit(EXIT_FAILURE);
             }
-        }
-
-        n_write += count;
-        to_write -= count;
-
-        time_end = time(NULL);
-
-        if (count == 0)
-            time_diff += (time_end - time_start);
-
-        if (time_diff > CONN_TIMEOUT) {
-            perror("Srv: connection timed out in write in conn routine, "
-                    "switch to main ctx");
-            close(conn_queue->curr_conn->conn_sock);
-            conn_queue->curr_conn->completed = true;
-            swapcontext(&conn_queue->curr_conn->conn_ctx,
-                        &conn_queue->main_ctx);
+        } else if (n_send == 0) {
+            pr_debug("Srv: %s(): sent 0 bytes to client, retry\n",
+                     __func__);
+            n_send_tries++;
+        } else {
+            n_send += count;
+            to_send -= count;
+            n_send_tries = 0;
         }
     }
-    pr_debug("Srv: %s(): Hello message sent to client\n", __func__);
 
-
-    /* Close the socket for this client */
-    close(conn_queue->curr_conn->conn_sock);
-    conn_queue->curr_conn->completed = true;
-
-    pr_debug("Srv: %s(): end conn_sock = %d, conn = %p\n", __func__,
+    if (!to_send) {
+        pr_debug("Srv: %s(): response sent to client\n", __func__);
+        pr_debug("Srv: %s(): end conn_sock = %d, conn = %p\n", __func__,
             conn_queue->curr_conn->conn_sock, conn_queue->curr_conn);
+    }
 
+    /* Close connection with client */
+    close_curr_conn(conn_queue);
     atomic_fetch_add(&n_conn, 1);
-
-    swapcontext(&conn_queue->curr_conn->conn_ctx, &conn_queue->main_ctx);
+    swap_to_main_ctx(conn_queue);
 }
 
 static int create_new_conn(int conn_sock)
