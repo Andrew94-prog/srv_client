@@ -8,19 +8,23 @@
 //#define DBG
 
 #ifdef DBG
-#define pr_debug(str) printf(str)
+#define pr_debug(...) printf(__VA_ARGS__)
 #else
 #define pr_debug
 #endif
 
-#define BUFFER_SIZE 512
+#define BUFFER_SIZE 1024
 
 int main(int argc, char *argv[]) {
     int sock = 0, srv_port = 8080, opt = 1;
     char srv_addr[20] = "127.0.0.1";
     struct sockaddr_in serv_addr;
-    char message[BUFFER_SIZE] = "Hello from client";
-    char buffer[BUFFER_SIZE] = {0};
+    char send_buf[BUFFER_SIZE] = " GET / HTTP/1.0\n"
+				"Host: 127.0.0.1:8080\n"
+				"User-Agent: Srv/1.0\n"
+				"Accept: */*\n";
+    char recv_buf[BUFFER_SIZE] = {0};
+    ssize_t to_send = strlen(send_buf), to_recv = BUFFER_SIZE;
 
     if (argc >= 3) {
         srv_port = atoi(argv[2]);
@@ -57,12 +61,12 @@ again:
     }
 
     /* Send a message to the server */
-    send(sock, message, sizeof(message), 0);
-    pr_debug("Client: message sent: %s\n", message);
+    send(sock, send_buf, to_send, 0);
+    pr_debug("Client: message sent: %s\n", send_buf);
 
     /* Read the response from the server */
-    read(sock, buffer, BUFFER_SIZE);
-    pr_debug("Client: response from server: %s\n", buffer);
+    read(sock, recv_buf, BUFFER_SIZE);
+    pr_debug("Client: response from server: %s\n", recv_buf);
 
     /* Close the socket */
     close(sock);
