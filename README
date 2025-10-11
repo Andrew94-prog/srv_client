@@ -1,3 +1,7 @@
-All sources are copmiled simply:
+srv - simple synchronyous server whch creates 1 thread for each new connection
 
-gcc <src_name.c> -o <bin_name>
+srv_async - asynchronyous server which handles multiple connection in 1 thread using coroutines
+
+Compile both servers:
+
+make all
