@@ -313,7 +313,7 @@ static int create_new_conn(int conn_sock)
     conn_ctx.uc_stack.ss_sp = conn_stack;
     conn_ctx.uc_stack.ss_size = STACK_SIZE;
     conn_ctx.uc_link = &conn_queues[min_q_id].main_ctx;
-    makecontext(&conn_ctx, conn_routine, 1, min_q_id);
+    makecontext(&conn_ctx, (void (*)(void)) conn_routine, 1, min_q_id);
 
     /* Enqueue new connection */
     conn = malloc(sizeof(conn_t));
@@ -348,7 +348,7 @@ static void sigusr1_hand(int sig, siginfo_t *si, void *ctx)
 
 static void *conn_thread_func(void *arg)
 {
-    int q_id = (int) arg;
+    int q_id = (int) (long) arg;
     conn_queue_t *conn_queue = &conn_queues[q_id];
     conn_t *conn;
     int conn_sock;
@@ -479,7 +479,8 @@ int main(int argc, char *argv[])
     for (i = 0; i < n_th; i++) {
         pthread_t pth;
 
-        pthread_create(&pth, NULL, &conn_thread_func, (void *) i);
+        pthread_create(&pth, NULL, &conn_thread_func,
+                       (void *) (long) i);
         conn_queues[i].th_id = pth;
     }
 
