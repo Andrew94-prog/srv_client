@@ -27,7 +27,7 @@
 
 #define STACK_SIZE		8192
 #define CONN_TIMEOUT		5
-#define MAX_ACCEPT_TRIES	100
+#define MAX_ACCEPT_TRIES	1
 #define MAX_NUM_WORKERS		1000
 
 #endif /* SRV_DEFS_H */

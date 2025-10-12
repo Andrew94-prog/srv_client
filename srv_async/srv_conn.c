@@ -238,9 +238,9 @@ static int create_new_conn(int conn_sock)
 void process_conn_func(int srv_sock)
 {
     struct sockaddr_in address;
-    int addrlen = sizeof(address), ret, conn_sock, sig;
+    int addrlen = sizeof(address), ret, conn_sock, sig, n_tries;
     sigset_t sig_set;
-    time_t all_start, all_end, try_start, try_end, try_time;
+    time_t all_start, all_end;
     conn_t *conn;
 
     /* Block SIGIO signal for waiting it via sigwait */
@@ -268,10 +268,8 @@ void process_conn_func(int srv_sock)
     all_start = time(NULL);
 
     /* Accept incoming connections in a loop */
-    try_time = 0;
+    n_tries = 0;
     while (1) {
-        try_start = time(NULL);
-
         /* Accept new connection and create new socket for it */
         conn_sock = accept(srv_sock, (struct sockaddr *)&address,
                            (socklen_t *)&addrlen);
@@ -289,18 +287,17 @@ void process_conn_func(int srv_sock)
                 pr_debug("Srv: %s(): accept async, handle other"
                         " clients while no new connections\n",
                         __func__);
+                n_tries++;
             } else {
                 p_error("Srv: accept failed");
                 exit(EXIT_FAILURE);
             }
 
-            try_end = time(NULL);
-            try_time += (try_end - try_start);
-
-            if (try_time > CONN_TIMEOUT) {
+            if (n_tries > MAX_ACCEPT_TRIES) {
                 pr_debug("Srv: %s(): sleeping in cycle awaiting accept\n",
                         __func__);
                 sigwait(&sig_set, &sig);
+                n_tries = 0;
             }
         }
 
