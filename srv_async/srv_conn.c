@@ -188,6 +188,12 @@ static void conn_handle_routine(void)
     swap_to_main_ctx(&p_conn_queue);
 }
 
+static void free_closed_conn(conn_t *conn)
+{
+    free(conn->conn_ctx.uc_stack.ss_sp);
+    free(conn);
+}
+
 static int create_new_conn(int conn_sock)
 {
     char *conn_stack;
@@ -306,7 +312,7 @@ void process_conn_func(int srv_sock)
             if (!conn->completed && !ret) {
                 enqueue_conn(&p_conn_queue, conn);
             } else {
-                free(conn);
+                free_closed_conn(conn);
             }
         }
 
