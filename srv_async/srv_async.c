@@ -72,8 +72,6 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    int worker_pids[n_p];
-
     srv_sock = create_listening_socket(srv_port);
     if (srv_sock < 0) {
         p_error("Srv: main: creation of socket failed");
@@ -83,13 +81,15 @@ int main(int argc, char *argv[])
     for (i = 0; i < n_p; i++) {
        if ((ret = fork()) == 0) {
            process_conn_func(srv_sock);
-       } else {
-           worker_pids[i] = ret;
        }
     }
 
-    for (i = 0; i < n_p; i++) {
-       waitpid(worker_pids[i], &status, 0);
+    while ((ret = wait(&status)) > 0) {
+       printf("Srv: main: %d worker %s %d\n", ret,
+              WIFEXITED(status) ? "exited with code" :
+                                  "terminated by signal",
+              WIFEXITED(status) ? WEXITSTATUS(status) :
+                                  WTERMSIG(status));
     }
 
     return 0;
