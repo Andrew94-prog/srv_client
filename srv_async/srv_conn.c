@@ -73,6 +73,14 @@ static int swap_to_conn_ctx(conn_queue_t *conn_queue, conn_t *conn)
     return swapcontext(&conn_queue->main_ctx, &conn->conn_ctx);
 }
 
+static bool is_http_message_end(char *recv_buf, ssize_t n_recv)
+{
+    return n_recv >= 4 && recv_buf[n_recv - 1] == '\n' &&
+                    recv_buf[n_recv - 2] == '\r' &&
+                    recv_buf[n_recv - 3] == '\n' &&
+                    recv_buf[n_recv - 4] == '\r';
+}
+
 static void conn_handle_routine(void)
 {
     char recv_buf[RECV_BUF_SIZE + 1] = {0};
@@ -94,6 +102,7 @@ static void conn_handle_routine(void)
 			"</html>\n";
     ssize_t to_recv = RECV_BUF_SIZE, to_send = strlen(send_buf);
     ssize_t n_recv = 0, n_send = 0, count;
+    bool completed;
     int ret;
 
     pr_debug("Srv: %s(): start conn_sock = %d, conn = %p\n", __func__,
@@ -106,10 +115,11 @@ static void conn_handle_routine(void)
     }
 
     /* Receive http request from client */
-    while (1) {
-        n_recv = read(p_conn_queue.curr_conn->conn_sock,
-                        (char *) recv_buf, to_recv);
-        if (n_recv < 0) {
+    completed = false;
+    while (to_recv && !completed) {
+        count = read(p_conn_queue.curr_conn->conn_sock,
+                        (char *) recv_buf + n_recv, to_recv);
+        if (count < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 pr_debug("Srv: %s(): recv async, switch to main_ctx, "
                          "conn_sock = %d, curr_conn = %p\n",
@@ -130,21 +140,34 @@ static void conn_handle_routine(void)
                 close_curr_conn(&p_conn_queue);
                 swap_to_main_ctx(&p_conn_queue);
             }
-        } else if (n_recv == 0) {
-            pr_debug("Srv: %s(): received empty buf from client,"
-                     " close connection and switch back to main_ctx\n",
-                     __func__);
-            close_curr_conn(&p_conn_queue);
-            swap_to_main_ctx(&p_conn_queue);
+        } else if (count > 0) {
+            n_recv += count;
+            to_recv -= count;
+
+            completed = is_http_message_end(recv_buf, n_recv);
         } else {
-            break;
+            completed = true;
         }
     }
+
+    /*
+     * If nothing was received from client, then close connection
+     * and switch back to main_ctx
+     */
+    if (!n_recv) {
+        pr_debug("Srv: %s(): received empty buf from client,"
+                 " close connection and switch back to main_ctx\n",
+                 __func__);
+        close_curr_conn(&p_conn_queue);
+        swap_to_main_ctx(&p_conn_queue);
+    }
+
     pr_debug("Srv: %s(): received from client: %s\n",
              __func__, recv_buf);
 
     /* Send http response to client */
-    while (to_send) {
+    completed = false;
+    while (to_send && !completed) {
         count = write(p_conn_queue.curr_conn->conn_sock,
                     (char *) send_buf + n_send, to_send);
         if (count < 0) {
@@ -166,13 +189,13 @@ static void conn_handle_routine(void)
                 p_error("Srv: write to client failed");
                 exit(EXIT_FAILURE);
             }
-        } else if (n_send == 0) {
-            pr_debug("Srv: %s(): sent 0 bytes to client, end\n",
-                     __func__);
-            break;
-        } else {
+        } else if (count > 0) {
             n_send += count;
             to_send -= count;
+        } else {
+            pr_debug("Srv: %s(): sent 0 bytes to client, end\n",
+                     __func__);
+            completed = true;
         }
     }
 
@@ -183,8 +206,8 @@ static void conn_handle_routine(void)
     }
 
     /* Close connection with client */
-    close_curr_conn(&p_conn_queue);
     atomic_fetch_add(&n_conn, 1);
+    close_curr_conn(&p_conn_queue);
     swap_to_main_ctx(&p_conn_queue);
 }
 
