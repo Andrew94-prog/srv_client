@@ -26,8 +26,8 @@
 #define SEND_BUF_SIZE		1024
 
 #define STACK_SIZE		8192
-#define CONN_TIMEOUT		5
-#define MAX_ACCEPT_TRIES	1
+#define MAX_ACTIVE_TIMEOUT	1
+#define MAX_INACTIVE_TIMEOUT	3
 #define MAX_NUM_WORKERS		1000
 
 #endif /* SRV_DEFS_H */

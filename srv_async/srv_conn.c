@@ -54,10 +54,20 @@ int enable_async(int sock)
     return 0;
 }
 
-static void close_curr_conn(conn_queue_t *conn_queue)
+static void curr_conn_close(conn_queue_t *conn_queue)
 {
     close(conn_queue->curr_conn->conn_sock);
-    conn_queue->curr_conn->completed = true;
+    conn_queue->curr_conn->is_completed = true;
+}
+
+static void curr_conn_keep_active(conn_queue_t *conn_queue)
+{
+    conn_queue->curr_conn->is_active = true;
+}
+
+static void curr_conn_keep_inactive(conn_queue_t *conn_queue)
+{
+    conn_queue->curr_conn->is_active = false;
 }
 
 static int swap_to_main_ctx(conn_queue_t *conn_queue)
@@ -81,6 +91,7 @@ static bool is_http_message_end(char *recv_buf, ssize_t n_recv)
                     recv_buf[n_recv - 4] == '\r';
 }
 
+
 static void conn_handle_routine(void)
 {
     char recv_buf[RECV_BUF_SIZE + 1] = {0};
@@ -102,6 +113,7 @@ static void conn_handle_routine(void)
 			"</html>\n";
     ssize_t to_recv = RECV_BUF_SIZE, to_send = strlen(send_buf);
     ssize_t n_recv = 0, n_send = 0, count;
+    time_t start_t, end_t;
     bool completed;
     int ret;
 
@@ -116,15 +128,29 @@ static void conn_handle_routine(void)
 
     /* Receive http request from client */
     completed = false;
+    start_t = time(NULL);
     while (to_recv && !completed) {
         count = read(p_conn_queue.curr_conn->conn_sock,
                         (char *) recv_buf + n_recv, to_recv);
         if (count < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                pr_debug("Srv: %s(): recv async, switch to main_ctx, "
-                         "conn_sock = %d, curr_conn = %p\n",
-                         __func__, p_conn_queue.curr_conn->conn_sock,
-                         p_conn_queue.curr_conn);
+                end_t = time(NULL);
+                if (end_t - start_t > MAX_ACTIVE_TIMEOUT) {
+                    pr_debug("Srv: %s(): recv async, keep inactivate "
+                            "conn_sock = %d, curr_conn = %p\n",
+                            __func__, p_conn_queue.curr_conn->conn_sock,
+                            p_conn_queue.curr_conn);
+                    curr_conn_keep_inactive(&p_conn_queue);
+                }
+
+                if (end_t - start_t > MAX_INACTIVE_TIMEOUT) {
+                    pr_debug("Srv: %s(): recv async, close "
+                            "conn_sock = %d, curr_conn = %p\n",
+                            __func__, p_conn_queue.curr_conn->conn_sock,
+                            p_conn_queue.curr_conn);
+                    curr_conn_close(&p_conn_queue);
+                }
+
 
                 ret = swap_to_main_ctx(&p_conn_queue);
                 if (ret == 0) {
@@ -137,16 +163,18 @@ static void conn_handle_routine(void)
             } else {
                 p_error("Srv: recv from client failed, close connection"
                        " and switch back to main_ctx");
-                close_curr_conn(&p_conn_queue);
+                curr_conn_close(&p_conn_queue);
                 swap_to_main_ctx(&p_conn_queue);
             }
         } else if (count > 0) {
             n_recv += count;
             to_recv -= count;
 
+            curr_conn_keep_active(&p_conn_queue);
             completed = is_http_message_end(recv_buf, n_recv);
         } else {
             completed = true;
+            curr_conn_keep_active(&p_conn_queue);
         }
     }
 
@@ -158,7 +186,7 @@ static void conn_handle_routine(void)
         pr_debug("Srv: %s(): received empty buf from client,"
                  " close connection and switch back to main_ctx\n",
                  __func__);
-        close_curr_conn(&p_conn_queue);
+        curr_conn_close(&p_conn_queue);
         swap_to_main_ctx(&p_conn_queue);
     }
 
@@ -167,15 +195,29 @@ static void conn_handle_routine(void)
 
     /* Send http response to client */
     completed = false;
+    start_t = time(NULL);
     while (to_send && !completed) {
         count = write(p_conn_queue.curr_conn->conn_sock,
                     (char *) send_buf + n_send, to_send);
         if (count < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                pr_debug("Srv: %s(): write async, switch to main_ctx, "
-                        "conn_sock = %d, curr_conn = %p\n",
-                        __func__, p_conn_queue.curr_conn->conn_sock,
-                        p_conn_queue.curr_conn);
+                end_t = time(NULL);
+                if (end_t - start_t > MAX_ACTIVE_TIMEOUT) {
+                    pr_debug("Srv: %s(): send async, keep inactive "
+                            "conn_sock = %d, curr_conn = %p\n",
+                            __func__, p_conn_queue.curr_conn->conn_sock,
+                            p_conn_queue.curr_conn);
+                    curr_conn_keep_inactive(&p_conn_queue);
+                }
+
+                if (end_t - start_t > MAX_INACTIVE_TIMEOUT) {
+                    pr_debug("Srv: %s(): send async, close "
+                            "conn_sock = %d, curr_conn = %p\n",
+                            __func__, p_conn_queue.curr_conn->conn_sock,
+                            p_conn_queue.curr_conn);
+                    curr_conn_close(&p_conn_queue);
+                }
+
 
                 ret = swap_to_main_ctx(&p_conn_queue);
                 if (ret == 0) {
@@ -192,10 +234,12 @@ static void conn_handle_routine(void)
         } else if (count > 0) {
             n_send += count;
             to_send -= count;
+            curr_conn_keep_active(&p_conn_queue);
         } else {
             pr_debug("Srv: %s(): sent 0 bytes to client, end\n",
                      __func__);
             completed = true;
+            curr_conn_keep_active(&p_conn_queue);
         }
     }
 
@@ -207,7 +251,7 @@ static void conn_handle_routine(void)
 
     /* Close connection with client */
     atomic_fetch_add(&n_conn, 1);
-    close_curr_conn(&p_conn_queue);
+    curr_conn_close(&p_conn_queue);
     swap_to_main_ctx(&p_conn_queue);
 }
 
@@ -249,7 +293,8 @@ static int create_new_conn(int conn_sock)
 
     memcpy(&conn->conn_ctx, &conn_ctx, sizeof(ucontext_t));
     conn->conn_sock = conn_sock;
-    conn->completed = false;
+    conn->is_completed = false;
+    conn->is_active = true;
     enqueue_conn(&p_conn_queue, conn);
 
     pr_debug("Srv: %s(): created new connection conn_sock = %d,"
@@ -261,10 +306,14 @@ static int create_new_conn(int conn_sock)
 void process_conn_func(int srv_sock)
 {
     struct sockaddr_in address;
-    int addrlen = sizeof(address), ret, conn_sock, sig, n_tries;
+    int addrlen = sizeof(address), ret, conn_sock, sig;
     sigset_t sig_set;
+    struct timespec sig_wait = {
+        .tv_sec = MAX_INACTIVE_TIMEOUT,
+        .tv_nsec = 0
+    };
     time_t all_start, all_end;
-    conn_t *conn;
+    conn_t *conn, *tail_conn;
 
     /* Block SIGIO signal for waiting it via sigwait */
     sigemptyset(&sig_set);
@@ -291,7 +340,6 @@ void process_conn_func(int srv_sock)
     all_start = time(NULL);
 
     /* Accept incoming connections in a loop */
-    n_tries = 0;
     while (1) {
         /* Accept new connection and create new socket for it */
         conn_sock = accept(srv_sock, (struct sockaddr *)&address,
@@ -307,32 +355,47 @@ void process_conn_func(int srv_sock)
             }
         } else {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                pr_debug("Srv: %s(): accept async, handle other"
-                        " clients while no new connections\n",
-                        __func__);
-                n_tries++;
+                if (!p_conn_queue.active_conn_cnt &&
+                        !p_conn_queue.inactive_conn_cnt) {
+                    pr_debug("Srv: %s(): accept async, no connections "
+                            "in queue, wait for new\n", __func__);
+                    sigwait(&sig_set, &sig);
+                } else if (!p_conn_queue.active_conn_cnt) {
+                    pr_debug("Srv: %s(): accept async, no active "
+                            "connections in queue, wait for timeout "
+                            "and try to handle inactive connections "
+                            "again\n", __func__);
+                    sigtimedwait(&sig_set, NULL, &sig_wait);
+                } else {
+                    pr_debug("Srv: %s(): accept async, handle other "
+                            "active connections in queue\n",
+                            __func__);
+                }
             } else {
                 p_error("Srv: accept failed");
                 exit(EXIT_FAILURE);
             }
-
-            if (n_tries > MAX_ACCEPT_TRIES) {
-                pr_debug("Srv: %s(): sleeping in cycle awaiting accept\n",
-                        __func__);
-                sigwait(&sig_set, &sig);
-                n_tries = 0;
-            }
         }
 
-        while (conn = dequeue_conn(&p_conn_queue)) {
+        tail_conn = p_conn_queue.tail;
+        while (1) {
+            conn = dequeue_conn(&p_conn_queue);
+            if (!conn) {
+                break;
+            }
+
             if (ret = swap_to_conn_ctx(&p_conn_queue, conn)) {
                 p_error("Srv: failed to switch to conn ctx\n");
             }
 
-            if (!conn->completed && !ret) {
+            if (!conn->is_completed && !ret) {
                 enqueue_conn(&p_conn_queue, conn);
             } else {
                 free_closed_conn(conn);
+            }
+
+            if (conn == tail_conn) {
+                break;
             }
         }
 

@@ -14,18 +14,22 @@ void enqueue_conn(conn_queue_t *conn_queue, conn_t *conn)
         conn_queue->tail = conn;
     }
 
-    conn_queue->conn_cnt++;
+    if (conn->is_active) {
+        conn_queue->active_conn_cnt++;
+    } else {
+        conn_queue->inactive_conn_cnt++;
+    }
 }
 
 conn_t *dequeue_conn(conn_queue_t *conn_queue)
 {
-    conn_t *ret;
+    conn_t *conn;
 
     if (!conn_queue->head) {
         return NULL;
     }
 
-    ret = conn_queue->head;
+    conn = conn_queue->head;
 
     if (conn_queue->head == conn_queue->tail) {
         conn_queue->head = NULL;
@@ -34,10 +38,15 @@ conn_t *dequeue_conn(conn_queue_t *conn_queue)
         conn_queue->head = conn_queue->head->next;
     }
 
-    ret->next = NULL;
-    conn_queue->conn_cnt--; 
+    conn->next = NULL;
 
-    return ret;
+    if (conn->is_active) {
+        conn_queue->active_conn_cnt--;
+    } else {
+        conn_queue->inactive_conn_cnt--;
+    }
+
+    return conn;
 }
 
 void init_conn_queue(conn_queue_t *conn_queue)
@@ -45,5 +54,6 @@ void init_conn_queue(conn_queue_t *conn_queue)
     conn_queue->head = NULL;
     conn_queue->tail = NULL;
     conn_queue->curr_conn = NULL;
-    conn_queue->conn_cnt = 0;
+    conn_queue->active_conn_cnt = 0;
+    conn_queue->inactive_conn_cnt = 0;
 }

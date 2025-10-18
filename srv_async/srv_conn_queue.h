@@ -7,7 +7,8 @@
 typedef struct Conn {
     ucontext_t conn_ctx;
     int conn_sock;
-    bool completed;
+    bool is_completed;
+    bool is_active;
 
     struct Conn *next;
 } conn_t;
@@ -19,7 +20,8 @@ typedef struct ConnQueue {
     conn_t *curr_conn;
     ucontext_t main_ctx;
 
-    int conn_cnt;
+    int active_conn_cnt;
+    int inactive_conn_cnt;
 } conn_queue_t;
 
 void enqueue_conn(conn_queue_t *conn_queue, conn_t *conn);
