@@ -25,7 +25,7 @@ static unsigned long prev_n_conn = 0;
 
 static conn_queue_t p_conn_queue;
 
-int enable_async(int sock)
+int set_nonblock(int sock)
 {
     if (fcntl(sock, F_SETFL, O_NONBLOCK)) {
         close(sock);
@@ -39,15 +39,20 @@ int enable_async(int sock)
         return -1;
     }
 
-    if (fcntl(sock, F_SETFL, fcntl(sock, F_GETFL) | O_ASYNC)) {
-        close(sock);
-        p_error("Srv: fcntl set async failed");
-        return -1;
-    }
-
     if (fcntl(sock, F_SETOWN, gettid())) {
         close(sock);
         p_error("Srv: fcntl set own failed");
+        return -1;
+    }
+
+    return 0;
+}
+
+int set_async(int sock)
+{
+    if (fcntl(sock, F_SETFL, fcntl(sock, F_GETFL) | O_ASYNC)) {
+        close(sock);
+        p_error("Srv: fcntl set async failed");
         return -1;
     }
 
@@ -121,8 +126,12 @@ static void conn_handle_routine(void)
             p_conn_queue.curr_conn->conn_sock, p_conn_queue.curr_conn);
 
     /* Turn new connection socket to non-blocking mode */
-    if (enable_async(p_conn_queue.curr_conn->conn_sock)) {
-        p_error("Srv: enabling async for conn_sock failed");
+    if (set_nonblock(p_conn_queue.curr_conn->conn_sock)) {
+        p_error("Srv: set nonblocking for conn_sock failed");
+        exit(EXIT_FAILURE);
+    }
+    if (set_async(p_conn_queue.curr_conn->conn_sock)) {
+        p_error("Srv: set async for conn_sock failed");
         exit(EXIT_FAILURE);
     }
 
@@ -324,7 +333,11 @@ void process_conn_func(int srv_sock)
     init_conn_queue(&p_conn_queue);
 
     /* Set non-blocking state for listening srv socket */
-    if (enable_async(srv_sock)) {
+    if (set_nonblock(srv_sock)) {
+        p_error("Srv: set nonblocking for listening socket failed");
+        exit(EXIT_FAILURE);
+    }
+    if (set_async(srv_sock)) {
         p_error("Srv: set async state for listening socket failed");
         exit(EXIT_FAILURE);
     }

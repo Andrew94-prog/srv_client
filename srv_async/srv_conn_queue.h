@@ -27,7 +27,8 @@ typedef struct ConnQueue {
 void enqueue_conn(conn_queue_t *conn_queue, conn_t *conn);
 conn_t *dequeue_conn(conn_queue_t *conn_queue);
 void init_conn_queue(conn_queue_t *conn_queue);
-int enable_async(int sock);
+int set_nonblock(int sock);
+int set_async(int sock);
 void process_conn_func(int srv_sock);
 
 #endif /* SRV_CONN_QUEUE_H */
