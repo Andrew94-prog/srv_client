@@ -27,7 +27,7 @@ static conn_queue_t p_conn_queue;
 
 int set_nonblock(int sock)
 {
-    if (fcntl(sock, F_SETFL, O_NONBLOCK)) {
+    if (fcntl(sock, F_SETFL, fcntl(sock, F_GETFL) | O_NONBLOCK)) {
         close(sock);
         p_error("Srv: fcntl set nonblocking failed");
         return -1;
