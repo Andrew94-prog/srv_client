@@ -59,6 +59,17 @@ int set_async(int sock)
     return 0;
 }
 
+static int set_async_shared(int sock)
+{
+    if (fcntl(sock, F_SET_ASYNC_SHARED, 0)) {
+        close(sock);
+        p_error("Srv: fcntl set async failed");
+        return -1;
+    }
+
+    return 0;
+}
+
 static void curr_conn_close(conn_queue_t *conn_queue)
 {
     close(conn_queue->curr_conn->conn_sock);
@@ -337,7 +348,7 @@ void process_conn_func(int srv_sock)
         p_error("Srv: set nonblocking for listening socket failed");
         exit(EXIT_FAILURE);
     }
-    if (set_async(srv_sock)) {
+    if (set_async_shared(srv_sock)) {
         p_error("Srv: set async state for listening socket failed");
         exit(EXIT_FAILURE);
     }
