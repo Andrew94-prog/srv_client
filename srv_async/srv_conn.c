@@ -16,6 +16,7 @@
 #include <stdatomic.h>
 #include <limits.h>
 #include <sys/resource.h>
+#include <sys/epoll.h>
 
 #include "srv_defs.h"
 #include "srv_conn_queue.h"
@@ -321,6 +322,8 @@ void process_conn_func(int srv_sock)
         .tv_sec = MAX_INACTIVE_TIMEOUT,
         .tv_nsec = 0
     };
+    struct epoll_event epoll_event;
+    int epoll_timeout, epoll_fd;
     time_t all_start, all_end;
     conn_t *conn, *tail_conn;
 
@@ -337,11 +340,20 @@ void process_conn_func(int srv_sock)
         p_error("Srv: set nonblocking for listening socket failed");
         exit(EXIT_FAILURE);
     }
-    if (set_async(srv_sock)) {
-        p_error("Srv: set async state for listening socket failed");
+    /* Create epoll fd for listening srv_sock */
+    epoll_fd = epoll_create1(0);
+    if (epoll_fd == -1) {
+        p_error("Srv: failed to create epoll_fd");
         exit(EXIT_FAILURE);
     }
- 
+    /* Configure epoll input events */
+    epoll_event.events = EPOLLIN;
+    epoll_event.data.fd = srv_sock;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, srv_sock,
+                  &epoll_event) == -1) {
+        p_error("Srv: failed to set polling for srv_sock");
+        exit(EXIT_FAILURE);
+    }
     /* Start listening for incoming connections */
     if (listen(srv_sock, SOMAXCONN) < 0) {
         p_error("Srv: listen failed");
@@ -354,40 +366,39 @@ void process_conn_func(int srv_sock)
 
     /* Accept incoming connections in a loop */
     while (1) {
-        /* Accept new connection and create new socket for it */
-        conn_sock = accept(srv_sock, (struct sockaddr *)&address,
-                           (socklen_t *)&addrlen);
-
-        if (conn_sock >= 0) {
-            pr_debug("Srv: %s(): accepted new conn_sock = %d in cycle\n",
-                     __func__, conn_sock);
-
-            if (create_new_conn(conn_sock)) {
-                p_error("Srv: create new conn failed in cycle");
-                exit(EXIT_FAILURE);
-            }
+        if (p_conn_queue.active_conn_cnt) {
+            epoll_timeout = 0;
+        } else if (p_conn_queue.inactive_conn_cnt) {
+            epoll_timeout = MAX_INACTIVE_TIMEOUT * 1000;
         } else {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                if (!p_conn_queue.active_conn_cnt &&
-                        !p_conn_queue.inactive_conn_cnt) {
-                    pr_debug("Srv: %s(): accept async, no connections "
-                            "in queue, wait for new\n", __func__);
-                    sigwait(&sig_set, &sig);
-                } else if (!p_conn_queue.active_conn_cnt) {
-                    pr_debug("Srv: %s(): accept async, no active "
-                            "connections in queue, wait for timeout "
-                            "and try to handle inactive connections "
-                            "again\n", __func__);
-                    sigtimedwait(&sig_set, NULL, &sig_wait);
-                } else {
-                    pr_debug("Srv: %s(): accept async, handle other "
-                            "active connections in queue\n",
-                            __func__);
+            epoll_timeout = -1;
+        }
+
+	/* Wait for new connections on listening sokcet */
+	ret = epoll_pwait(epoll_fd, &epoll_event, 1,
+                          epoll_timeout, &sig_set);
+        if (ret > 0) {
+            /* Accept new connection and create new socket for it */
+            conn_sock = accept(srv_sock, (struct sockaddr *)&address,
+                               (socklen_t *)&addrlen);
+            if (conn_sock >= 0) {
+                pr_debug("Srv: %s(): accepted new conn_sock = %d "
+                         "in cycle\n", __func__, conn_sock);
+
+                if (create_new_conn(conn_sock)) {
+                    p_error("Srv: create new conn failed in cycle");
+                    exit(EXIT_FAILURE);
                 }
             } else {
-                p_error("Srv: accept failed");
-                exit(EXIT_FAILURE);
+                pr_debug("Srv: %s(): new conn not accepted, go to "
+                         "handle existing connections\n", __func__);
             }
+        } else if (ret == 0) {
+            pr_debug("Srv: %s(): no incoming connections, go to "
+                     "handle existing connections\n", __func__);
+        } else {
+            p_error("Srv: epoll_pwait for srv_sock failed");
+            exit(EXIT_FAILURE);
         }
 
         tail_conn = p_conn_queue.tail;
