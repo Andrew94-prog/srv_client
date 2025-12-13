@@ -1,6 +1,6 @@
-OBJS := srv_async.o srv_conn.o srv_queue.o
+OBJS := srv_async.o srv_conn_ctxt.o srv_routines.o srv_send_recv.o srv_sock.o
 
-CFLAGS=
+CFLAGS=-Wall
 
 %.o: %.c
 	$(CC) $(CFLAGS) -O2 -c $<

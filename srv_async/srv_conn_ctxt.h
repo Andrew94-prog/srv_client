@@ -24,11 +24,18 @@ typedef struct ConnQueue {
     int inactive_conn_cnt;
 } conn_queue_t;
 
+extern conn_queue_t p_conn_queue;
+
 void enqueue_conn(conn_queue_t *conn_queue, conn_t *conn);
 conn_t *dequeue_conn(conn_queue_t *conn_queue);
 void init_conn_queue(conn_queue_t *conn_queue);
-int set_nonblock(int sock);
-int set_async(int sock);
-void process_conn_func(int srv_sock);
+
+void curr_conn_close(conn_queue_t *conn_queue);
+void curr_conn_keep_active(conn_queue_t *conn_queue);
+void curr_conn_keep_inactive(conn_queue_t *conn_queue);
+int swap_to_main_ctx(conn_queue_t *conn_queue);
+int swap_to_conn_ctx(conn_queue_t *conn_queue, conn_t *conn);
+void free_closed_conn(conn_t *conn);
+int create_new_conn(int conn_sock);
 
 #endif /* SRV_CONN_QUEUE_H */

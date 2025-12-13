@@ -1,59 +1,12 @@
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
 #include <errno.h>
-#include <stdbool.h>
-#include <signal.h>
-#include <wait.h>
-#include <time.h>
-#include <ucontext.h>
-#include <fcntl.h>
-#include <poll.h>
-#include <stdatomic.h>
-#include <limits.h>
-#include <sys/resource.h>
 #include <sys/wait.h>
 
 #include "srv_defs.h"
-#include "srv_conn_queue.h"
-
-static int create_listening_socket(int srv_port)
-{
-    struct sockaddr_in address;
-    int srv_sock, opt = 1;
-    int addrlen = sizeof(address);
-
-    /* Create listening socket */
-    srv_sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (srv_sock == -1) {
-        p_error("Srv: main: socket failed");
-        return -1;
-    }
-
-    /* Forcefully attaching socket to the port */
-    if (setsockopt(srv_sock, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT,
-                   &opt, sizeof(opt))) {
-        p_error("Srv: main: setsockopt failed for srv_sock");
-        return -1;
-    }
-
-    /* Set parameters for listening socket */
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(srv_port);
-
-    /* Bind listening socket to the address and port */
-    if (bind(srv_sock, (struct sockaddr *)&address, sizeof(address))) {
-        p_error("Srv: main: bind failed for srv_sock");
-        return -1;
-    }
-
-    return srv_sock;
-}
+#include "srv_routines.h"
+#include "srv_sock.h"
 
 int main(int argc, char *argv[])
 {
@@ -80,7 +33,7 @@ int main(int argc, char *argv[])
 
     for (i = 0; i < n_p; i++) {
        if ((ret = fork()) == 0) {
-           process_conn_func(srv_sock);
+           handle_connections_routine(srv_sock);
        }
     }
 
