@@ -7,23 +7,27 @@
 #include "srv_defs.h"
 #include "srv_routines.h"
 #include "srv_sock.h"
+#include "srv_opts.h"
 
 int main(int argc, char *argv[])
 {
-    int srv_sock, srv_port = 8080, n_p = 1;
+    int srv_sock, srv_port, n_w;
     int ret, i, status;
 
-    if (argc >= 3) {
-        n_p = atoi(argv[1]);
-        srv_port = atoi(argv[2]);
-    } else if (argc >= 2) {
-        n_p = atoi(argv[1]);
-    }
-
-    if (n_p > MAX_NUM_WORKERS) {
-        p_error("Srv: main: too many workers to create");
+    ret = parse_srv_opts(argc, argv);
+    if (ret < 0) {
+        p_error("Srv: main: parse options failed\n");
+        printf("%s", HELP_MSG);
         exit(EXIT_FAILURE);
     }
+
+    if (SRV_OPTS.help) {
+        printf("%s", HELP_MSG);
+        return 0;
+    }
+
+    srv_port = SRV_OPTS.port;
+    n_w = SRV_OPTS.num_workers;
 
     srv_sock = create_listening_socket(srv_port);
     if (srv_sock < 0) {
@@ -31,7 +35,7 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    for (i = 0; i < n_p; i++) {
+    for (i = 0; i < n_w; i++) {
        if ((ret = fork()) == 0) {
            handle_connections_routine(srv_sock);
        }

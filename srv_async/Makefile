@@ -1,4 +1,4 @@
-OBJS := srv_async.o srv_conn_ctxt.o srv_routines.o srv_send_recv.o srv_sock.o
+OBJS := srv_async.o srv_conn_ctxt.o srv_routines.o srv_send_recv.o srv_sock.o srv_opts.o
 
 CFLAGS=-Wall
 
