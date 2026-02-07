@@ -4,18 +4,19 @@
 #include <stdbool.h>
 #include <ucontext.h>
 
+#include "srv_qlist.h"
+
 typedef struct Conn {
     ucontext_t conn_ctx;
     int conn_sock;
     bool is_completed;
     bool is_active;
 
-    struct Conn *next;
+    struct qlist_head qlist;
 } conn_t;
 
 typedef struct ConnQueue {
-    conn_t *head;
-    conn_t *tail;
+    struct qlist_head qconn_list;
 
     conn_t *curr_conn;
     ucontext_t main_ctx;
@@ -26,8 +27,8 @@ typedef struct ConnQueue {
 
 extern conn_queue_t p_conn_queue;
 
-void enqueue_conn(conn_queue_t *conn_queue, conn_t *conn);
-conn_t *dequeue_conn(conn_queue_t *conn_queue);
+void add_conn_to_queue(conn_queue_t *conn_queue, conn_t *conn);
+void remove_conn_from_queue(conn_queue_t *conn_queue, conn_t *conn);
 void init_conn_queue(conn_queue_t *conn_queue);
 
 void curr_conn_close(conn_queue_t *conn_queue);

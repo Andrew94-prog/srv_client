@@ -14,6 +14,7 @@
 #include "srv_conn_ctxt.h"
 #include "srv_sock.h"
 #include "srv_send_recv.h"
+#include "srv_qlist.h"
 
 static atomic_ulong n_conn = 0;
 static unsigned long prev_n_conn = 0;
@@ -77,7 +78,7 @@ void handle_connections_routine(int srv_sock)
     struct epoll_event epoll_event;
     int epoll_timeout, epoll_fd;
     time_t all_start, all_end;
-    conn_t *conn, *tail_conn;
+    conn_t *conn, *conn_n;
 
     /* Block SIGIO signal for waiting it via sigwait */
     sigemptyset(&sig_set);
@@ -154,25 +155,15 @@ void handle_connections_routine(int srv_sock)
         }
 
         /* Handle all connections in conn queue */
-        tail_conn = p_conn_queue.tail;
-        while (1) {
-            conn = dequeue_conn(&p_conn_queue);
-            if (!conn) {
-                break;
-            }
-
+        qlist_foreach_entry_safe(&p_conn_queue.qconn_list, conn, conn_n, qlist) {
             if ((ret = swap_to_conn_ctx(&p_conn_queue, conn))) {
                 p_error("Srv: failed to switch to conn ctx\n");
+                exit(EXIT_FAILURE);
             }
 
-            if (!conn->is_completed && !ret) {
-                enqueue_conn(&p_conn_queue, conn);
-            } else {
+            if (conn->is_completed || ret) {
+                remove_conn_from_queue(&p_conn_queue, conn);
                 free_closed_conn(conn);
-            }
-
-            if (conn == tail_conn) {
-                break;
             }
         }
 

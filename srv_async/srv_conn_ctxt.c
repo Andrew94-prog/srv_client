@@ -8,20 +8,13 @@
 #include "srv_conn_ctxt.h"
 #include "srv_routines.h"
 #include "srv_defs.h"
+#include "srv_qlist.h"
 
 conn_queue_t p_conn_queue;
 
-void enqueue_conn(conn_queue_t *conn_queue, conn_t *conn)
+void add_conn_to_queue(conn_queue_t *conn_queue, conn_t *conn)
 {
-    conn->next = NULL;
-
-    if (!conn_queue->tail) {
-        conn_queue->head = conn;
-        conn_queue->tail = conn;
-    } else {
-        conn_queue->tail->next = conn;
-        conn_queue->tail = conn;
-    }
+    qlist_add_head(&conn_queue->qconn_list, &conn->qlist);
 
     if (conn->is_active) {
         conn_queue->active_conn_cnt++;
@@ -30,38 +23,21 @@ void enqueue_conn(conn_queue_t *conn_queue, conn_t *conn)
     }
 }
 
-conn_t *dequeue_conn(conn_queue_t *conn_queue)
+void remove_conn_from_queue(conn_queue_t *conn_queue, conn_t *conn)
 {
-    conn_t *conn;
-
-    if (!conn_queue->head) {
-        return NULL;
-    }
-
-    conn = conn_queue->head;
-
-    if (conn_queue->head == conn_queue->tail) {
-        conn_queue->head = NULL;
-        conn_queue->tail = NULL;
-    } else {
-        conn_queue->head = conn_queue->head->next;
-    }
-
-    conn->next = NULL;
+    qlist_del_entry(&conn->qlist);
 
     if (conn->is_active) {
         conn_queue->active_conn_cnt--;
     } else {
         conn_queue->inactive_conn_cnt--;
     }
-
-    return conn;
 }
 
 void init_conn_queue(conn_queue_t *conn_queue)
 {
-    conn_queue->head = NULL;
-    conn_queue->tail = NULL;
+    qlist_head_init(&conn_queue->qconn_list);
+
     conn_queue->curr_conn = NULL;
     conn_queue->active_conn_cnt = 0;
     conn_queue->inactive_conn_cnt = 0;
@@ -136,7 +112,7 @@ int create_new_conn(int conn_sock)
     conn->conn_sock = conn_sock;
     conn->is_completed = false;
     conn->is_active = true;
-    enqueue_conn(&p_conn_queue, conn);
+    add_conn_to_queue(&p_conn_queue, conn);
 
     pr_debug("Srv: %s(): created new connection conn_sock = %d,"
             " conn = %p\n", __func__, conn_sock, conn);
