@@ -22,12 +22,14 @@
 #define RECV_BUF_SIZE		1024
 #define SEND_BUF_SIZE		1024
 
-#define STACK_SIZE		8192
+#define STACK_SIZE		16384
 #define MAX_ACTIVE_TIMEOUT	1
 #define MAX_INACTIVE_TIMEOUT	3
 #define MAX_NUM_WORKERS		1000
 #define DEFAULT_SRV_PORT	8080
 #define DEFAULT_NUM_WORKERS	1
+#define MIN_CONN_CTX_CACHE_CNT	50
+#define MAX_CONN_CTX_CACHE_CNT	300
 
 #define HTTP_RESPONSE_MSG "HTTP/1.1 200 OK\n" \
 			"Content-Type: text/html; charset=UTF-8\n" \

@@ -87,6 +87,8 @@ void handle_connections_routine(int srv_sock)
 
     /* Init connection queue struct for current server process */
     init_conn_queue(&p_conn_queue);
+    /* Init conn ctx cache for fast allocation */
+    init_conn_ctx_cache(&p_conn_ctx_cache);
 
     /* Set non-blocking state for listening srv socket */
     if (set_nonblock(srv_sock)) {
