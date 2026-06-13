@@ -53,7 +53,7 @@ void handle_one_connection(void)
         swap_to_main_ctx(&p_conn_queue);
     }
 
-    pr_debug("Srv: %s(): received from client: %s\n",
+    pr_debug("Srv: %s(): received from client:\n %s\n",
              __func__, recv_buf);
 
     /* Send http response to client */
@@ -149,8 +149,10 @@ void handle_connections_routine(int srv_sock)
                          "handle existing connections\n", __func__);
             }
         } else if (ret == 0) {
-            pr_debug("Srv: %s(): no incoming connections, go to "
-                     "handle existing connections\n", __func__);
+            pr_debug("Srv: %s(): no incoming connections, go to handle"
+                     " existing connections active %d, inactive %d\n",
+                     __func__, p_conn_queue.active_conn_cnt,
+                     p_conn_queue.inactive_conn_cnt);
         } else {
             p_error("Srv: epoll_pwait for srv_sock failed");
             exit(EXIT_FAILURE);
