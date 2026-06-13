@@ -153,12 +153,20 @@ void curr_conn_close(conn_queue_t *conn_queue)
 
 void curr_conn_keep_active(conn_queue_t *conn_queue)
 {
-    conn_queue->curr_conn->is_active = true;
+    if (!conn_queue->curr_conn->is_active) {
+        conn_queue->curr_conn->is_active = true;
+        conn_queue->active_conn_cnt++;
+        conn_queue->inactive_conn_cnt--;
+    }
 }
 
 void curr_conn_keep_inactive(conn_queue_t *conn_queue)
 {
-    conn_queue->curr_conn->is_active = false;
+    if (conn_queue->curr_conn->is_active) {
+        conn_queue->curr_conn->is_active = false;
+        conn_queue->active_conn_cnt--;
+        conn_queue->inactive_conn_cnt++;
+    }
 }
 
 void free_closed_conn(conn_t *conn)
