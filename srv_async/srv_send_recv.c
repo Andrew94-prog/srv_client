@@ -20,27 +20,27 @@ static bool is_http_message_end(char *recv_buf, ssize_t n_recv)
 ssize_t recv_http_msg(char *recv_buf, ssize_t to_recv)
 {
     ssize_t n_recv = 0, count;
-    time_t start_t, end_t;
     bool completed;
     int ret;
 
     completed = false;
-    start_t = time(NULL);
+    curr_conn_update_active(&p_conn_queue);
     while (to_recv && !completed) {
         count = read(p_conn_queue.curr_conn->conn_sock,
                         (char *) recv_buf + n_recv, to_recv);
         if (count < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                end_t = time(NULL);
-                if (end_t - start_t > MAX_ACTIVE_TIMEOUT) {
+                if (curr_conn_timeout(&p_conn_queue,
+                                      MAX_ACTIVE_TIMEOUT)) {
                     pr_debug("Srv: %s(): recv async, keep inactivate "
                             "conn_sock = %d, curr_conn = %p\n",
                             __func__, p_conn_queue.curr_conn->conn_sock,
                             p_conn_queue.curr_conn);
-                    curr_conn_keep_inactive(&p_conn_queue);
+                    curr_conn_set_inactive(&p_conn_queue);
                 }
 
-                if (end_t - start_t > MAX_INACTIVE_TIMEOUT) {
+                if (curr_conn_timeout(&p_conn_queue,
+                                      MAX_INACTIVE_TIMEOUT)) {
                     pr_debug("Srv: %s(): recv async, close "
                             "conn_sock = %d, curr_conn = %p\n",
                             __func__, p_conn_queue.curr_conn->conn_sock,
@@ -67,11 +67,12 @@ ssize_t recv_http_msg(char *recv_buf, ssize_t to_recv)
             n_recv += count;
             to_recv -= count;
 
-            curr_conn_keep_active(&p_conn_queue);
+            curr_conn_update_active(&p_conn_queue);
             completed = is_http_message_end(recv_buf, n_recv);
         } else {
+            pr_debug("Srv: %s(): recv 0 bytes from client, end\n",
+                     __func__);
             completed = true;
-            curr_conn_keep_active(&p_conn_queue);
         }
     }
 
@@ -81,27 +82,27 @@ ssize_t recv_http_msg(char *recv_buf, ssize_t to_recv)
 ssize_t send_http_msg(const char *send_buf, ssize_t to_send)
 {
     ssize_t n_send = 0, count;
-    time_t start_t, end_t;
     bool completed;
     int ret;
 
     completed = false;
-    start_t = time(NULL);
+    curr_conn_update_active(&p_conn_queue);
     while (to_send && !completed) {
         count = write(p_conn_queue.curr_conn->conn_sock,
                     (const char *) send_buf + n_send, to_send);
         if (count < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                end_t = time(NULL);
-                if (end_t - start_t > MAX_ACTIVE_TIMEOUT) {
+                if (curr_conn_timeout(&p_conn_queue,
+                                      MAX_ACTIVE_TIMEOUT)) {
                     pr_debug("Srv: %s(): send async, keep inactive "
                             "conn_sock = %d, curr_conn = %p\n",
                             __func__, p_conn_queue.curr_conn->conn_sock,
                             p_conn_queue.curr_conn);
-                    curr_conn_keep_inactive(&p_conn_queue);
+                    curr_conn_set_inactive(&p_conn_queue);
                 }
 
-                if (end_t - start_t > MAX_INACTIVE_TIMEOUT) {
+                if (curr_conn_timeout(&p_conn_queue,
+                                      MAX_INACTIVE_TIMEOUT)) {
                     pr_debug("Srv: %s(): send async, close "
                             "conn_sock = %d, curr_conn = %p\n",
                             __func__, p_conn_queue.curr_conn->conn_sock,
@@ -125,12 +126,11 @@ ssize_t send_http_msg(const char *send_buf, ssize_t to_send)
         } else if (count > 0) {
             n_send += count;
             to_send -= count;
-            curr_conn_keep_active(&p_conn_queue);
+            curr_conn_update_active(&p_conn_queue);
         } else {
             pr_debug("Srv: %s(): sent 0 bytes to client, end\n",
                      __func__);
             completed = true;
-            curr_conn_keep_active(&p_conn_queue);
         }
     }
 

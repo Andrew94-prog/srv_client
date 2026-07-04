@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <malloc.h>
 #include <sys/mman.h>
+#include <time.h>
 
 #include "srv_conn_ctxt.h"
 #include "srv_routines.h"
@@ -13,6 +14,16 @@
 
 conn_queue_t p_conn_queue;
 conn_ctx_cache_t p_conn_ctx_cache;
+
+static unsigned long curr_time(void)
+{
+    struct timespec ts;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec * 1000000000 + ts.tv_nsec;
+}
+
+/* -------------------------------------------------------------- */
 
 static conn_t *alloc_conn_ctx_mem(void)
 {
@@ -151,22 +162,34 @@ void curr_conn_close(conn_queue_t *conn_queue)
     conn_queue->curr_conn->is_completed = true;
 }
 
-void curr_conn_keep_active(conn_queue_t *conn_queue)
+void curr_conn_set_active(conn_queue_t *conn_queue)
 {
     if (!conn_queue->curr_conn->is_active) {
         conn_queue->curr_conn->is_active = true;
+        conn_queue->curr_conn->last_active = curr_time();
         conn_queue->active_conn_cnt++;
         conn_queue->inactive_conn_cnt--;
     }
 }
 
-void curr_conn_keep_inactive(conn_queue_t *conn_queue)
+void curr_conn_set_inactive(conn_queue_t *conn_queue)
 {
     if (conn_queue->curr_conn->is_active) {
         conn_queue->curr_conn->is_active = false;
         conn_queue->active_conn_cnt--;
         conn_queue->inactive_conn_cnt++;
     }
+}
+
+void curr_conn_update_active(conn_queue_t *conn_queue)
+{
+    conn_queue->curr_conn->last_active = curr_time();
+}
+
+bool curr_conn_timeout(conn_queue_t *conn_queue, unsigned long timeout)
+{
+    return (curr_time() - conn_queue->curr_conn->last_active > timeout) ?
+            true : false;
 }
 
 void free_closed_conn(conn_t *conn)

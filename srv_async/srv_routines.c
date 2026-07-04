@@ -124,7 +124,7 @@ void handle_connections_routine(int srv_sock)
         if (p_conn_queue.active_conn_cnt) {
             epoll_timeout = 0;
         } else if (p_conn_queue.inactive_conn_cnt) {
-            epoll_timeout = MAX_INACTIVE_TIMEOUT * 1000;
+            epoll_timeout = MAX_INACTIVE_TIMEOUT / 1000UL;
         } else {
             epoll_timeout = -1;
         }
