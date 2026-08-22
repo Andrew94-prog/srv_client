@@ -14,6 +14,11 @@ int main(int argc, char *argv[])
     int srv_sock, srv_port, n_w;
     int ret, i, status;
 
+    ret = parse_srv_config();
+    if (ret < 0) {
+        p_error("Srv: main: config file parsing failed");
+    }
+
     ret = parse_srv_opts(argc, argv);
     if (ret < 0) {
         p_error("Srv: main: parse options failed\n");
