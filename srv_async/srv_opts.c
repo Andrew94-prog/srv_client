@@ -11,20 +11,20 @@
 
 #define MAX_LINE_LEN 1024
 
-srv_opts_t SRV_OPTS = {
+srv_config_t SRV_CONFIG = {
     .port = DEFAULT_SRV_PORT,
     .num_workers = DEFAULT_NUM_WORKERS,
     .help = false
 };
 
-const char HELP_MSG[] = "Supported options for server:\n"
+const char HELP_MSG[] = "Supported cmdline options for server:\n"
                   "-w NUM_WORKERS - number of worker processes "
                   "to create, should be from 1 to 1000\n"
                   "-p PORT_NUM - port number to listen on server, "
                   "should be from 1 to 65536 (max valid port)\n"
                   "-h - get this help\n";
 
-int parse_srv_opts(int argc, char *argv[])
+int parse_srv_cmdline_opts(int argc, char *argv[])
 {
     int c, ret = 0;
     long val;
@@ -42,7 +42,7 @@ int parse_srv_opts(int argc, char *argv[])
                 ret = -EINVAL;
                 break;
             }
-            SRV_OPTS.num_workers = (int) val;
+            SRV_CONFIG.num_workers = (int) val;
             break;
         }
         case 'p': {
@@ -55,14 +55,14 @@ int parse_srv_opts(int argc, char *argv[])
                 ret = -EINVAL;
                 break;
             }
-            SRV_OPTS.port = (int) val;
+            SRV_CONFIG.port = (int) val;
             break;
         }
         case 'h':
-            SRV_OPTS.help = true;
+            SRV_CONFIG.help = true;
             break;
         default:
-            SRV_OPTS.help = true;
+            SRV_CONFIG.help = true;
             ret = -EINVAL;
         }
     }
@@ -116,7 +116,7 @@ static int parse_srv_config_line(char *line)
                             "in config file\n", val);
             return -EINVAL;
         }
-        SRV_OPTS.port = val;
+        SRV_CONFIG.port = val;
     } else if (strcmp(key, "num_workers") == 0) {
         val = atoi(val_str);
         if (val == 0 || val < 1 || val > MAX_NUM_WORKERS) {
@@ -124,7 +124,7 @@ static int parse_srv_config_line(char *line)
                             "in config file\n", val);
             return -EINVAL;
         }
-        SRV_OPTS.num_workers = val;
+        SRV_CONFIG.num_workers = val;
     }
 
     return 0;

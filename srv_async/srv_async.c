@@ -19,20 +19,20 @@ int main(int argc, char *argv[])
         p_error("Srv: main: config file parsing failed");
     }
 
-    ret = parse_srv_opts(argc, argv);
+    ret = parse_srv_cmdline_opts(argc, argv);
     if (ret < 0) {
-        p_error("Srv: main: parse options failed\n");
+        p_error("Srv: main: parse cmdline opts failed\n");
         printf("%s", HELP_MSG);
         exit(EXIT_FAILURE);
     }
 
-    if (SRV_OPTS.help) {
+    if (SRV_CONFIG.help) {
         printf("%s", HELP_MSG);
         return 0;
     }
 
-    srv_port = SRV_OPTS.port;
-    n_w = SRV_OPTS.num_workers;
+    srv_port = SRV_CONFIG.port;
+    n_w = SRV_CONFIG.num_workers;
 
     srv_sock = create_listening_socket(srv_port);
     if (srv_sock < 0) {

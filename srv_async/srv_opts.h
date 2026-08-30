@@ -3,16 +3,16 @@
 
 #include <stdbool.h>
 
-typedef struct srv_opts {
+typedef struct srv_config {
     int port;
     int num_workers;
     bool help;
-} srv_opts_t;
+} srv_config_t;
 
-extern srv_opts_t SRV_OPTS;
+extern srv_config_t SRV_CONFIG;
 extern const char HELP_MSG[];
 
-int parse_srv_opts(int argc, char *argv[]);
+int parse_srv_cmdline_opts(int argc, char *argv[]);
 int parse_srv_config(void);
 
 #endif /* SRV_OPTS_H */
