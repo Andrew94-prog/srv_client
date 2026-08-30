@@ -7,7 +7,7 @@
 #include "srv_defs.h"
 #include "srv_routines.h"
 #include "srv_sock.h"
-#include "srv_opts.h"
+#include "srv_config.h"
 
 int main(int argc, char *argv[])
 {

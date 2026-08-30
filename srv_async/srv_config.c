@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include <unistd.h>
 
-#include "srv_opts.h"
+#include "srv_config.h"
 #include "srv_defs.h"
 
 #define MAX_LINE_LEN 1024

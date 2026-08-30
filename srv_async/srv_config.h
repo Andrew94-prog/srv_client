@@ -1,5 +1,5 @@
-#ifndef SRV_OPTS_H
-#define SRV_OPTS_H
+#ifndef SRV_CONFIG_H
+#define SRV_CONFIG_H
 
 #include <stdbool.h>
 
@@ -15,4 +15,4 @@ extern const char HELP_MSG[];
 int parse_srv_cmdline_opts(int argc, char *argv[]);
 int parse_srv_config(void);
 
-#endif /* SRV_OPTS_H */
+#endif /* SRV_CONFIG_H */
