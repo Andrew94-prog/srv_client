@@ -15,9 +15,16 @@
 #include "srv_sock.h"
 #include "srv_send_recv.h"
 #include "srv_qlist.h"
+#include "srv_config.h"
 
 static atomic_ulong n_conn = 0;
 static unsigned long prev_n_conn = 0;
+
+static void sigint_handler(int sig)
+{
+    fflush(SRV_CONFIG.log_file_desc);
+    exit(128 + sig);
+}
 
 void handle_one_connection(void)
 {
@@ -86,11 +93,11 @@ void handle_connections_routine(int srv_sock)
     sigprocmask(SIG_BLOCK, &sig_set, NULL);
 
     /*
-     * Set default action for SIGINT signal in all workers
+     * Set new action for SIGINT signal in all workers
      * to avoid calling of SIGINT handler set by server
-     * main process.
+     * main process and flush all prints to log file
      */
-    signal(SIGINT, SIG_DFL);
+    signal(SIGINT, sigint_handler);
 
     /* Init connection queue struct for current server process */
     init_conn_queue(&p_conn_queue);
