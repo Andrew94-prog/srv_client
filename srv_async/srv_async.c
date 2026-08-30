@@ -72,13 +72,14 @@ int main(int argc, char *argv[])
 
     ret = parse_srv_config();
     if (ret < 0) {
-        p_error("Srv: main: config file parsing failed");
+        fprintf(stderr, "%s(): config file parsing failed\n", __func__);
+        fprintf(stderr, "%s", HELP_MSG);
     }
 
     ret = parse_srv_cmdline_opts(argc, argv);
     if (ret < 0) {
-        p_error("Srv: main: parse cmdline opts failed\n");
-        printf("%s", HELP_MSG);
+        fprintf(stderr, "%s(): parse cmdline opts failed\n", __func__);
+        fprintf(stderr, "%s", HELP_MSG);
         exit(EXIT_FAILURE);
     }
 
