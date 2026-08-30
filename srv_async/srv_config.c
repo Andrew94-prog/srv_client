@@ -9,14 +9,7 @@
 #include "srv_config.h"
 #include "srv_defs.h"
 
-srv_config_t SRV_CONFIG = {
-    .port = DEFAULT_SRV_PORT,
-    .num_workers = DEFAULT_NUM_WORKERS,
-    .log_file_name = NULL,
-    .log_file_desc = NULL,
-    .log_level = 0,
-    .help = false
-};
+srv_config_t SRV_CONFIG;
 
 const char HELP_MSG[] = "Supported cmdline options for server:\n"
                   "-w NUM_WORKERS - number of worker processes "

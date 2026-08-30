@@ -13,7 +13,7 @@
 static void wait_for_workers(void)
 {
     int ret, status;
-    FILE *fout = SRV_CONFIG.log_file_desc ? SRV_CONFIG.log_file_desc : stdout;
+    FILE *fout = SRV_CONFIG.log_file_desc;
 
     while ((ret = wait(&status)) > 0) {
         fprintf(fout, "%s(): %d worker %s %d\n", __func__, ret,
@@ -26,9 +26,10 @@ static void wait_for_workers(void)
 
 static void close_srv_log(void)
 {
-    if (SRV_CONFIG.log_file_desc) {
+    if (SRV_CONFIG.log_file_desc &&
+            SRV_CONFIG.log_file_desc != stdout) {
         fclose(SRV_CONFIG.log_file_desc);
-        SRV_CONFIG.log_file_desc = NULL;
+        SRV_CONFIG.log_file_desc = stdout;
     }
 }
 
@@ -40,24 +41,34 @@ static void handle_sigint(int sig)
 
 static void print_srv_config(void)
 {
-    FILE *fout = SRV_CONFIG.log_file_desc ? SRV_CONFIG.log_file_desc : stdout;
+    FILE *fout = SRV_CONFIG.log_file_desc;
 
     fprintf(fout, "Server started with parameters:\n");
     fprintf(fout, "port: %d\n", SRV_CONFIG.port);
     fprintf(fout, "num_workers: %d\n", SRV_CONFIG.num_workers);
-    if (SRV_CONFIG.log_file_name)
-        fprintf(fout, "log_file_name: %s\n", SRV_CONFIG.log_file_name);
-    else
-        fprintf(fout, "log_file_name: stdout\n");
+    fprintf(fout, "log_file_name: %s\n", SRV_CONFIG.log_file_name ?
+                SRV_CONFIG.log_file_name : "stdout");
     fprintf(fout, "log_file_desc: %p\n", SRV_CONFIG.log_file_desc);
     fprintf(fout, "\n");
     fflush(fout);
+}
+
+static void init_srv_config_default(void)
+{
+    SRV_CONFIG.port = DEFAULT_SRV_PORT;
+    SRV_CONFIG.num_workers = DEFAULT_NUM_WORKERS;
+    SRV_CONFIG.log_file_name = NULL;
+    SRV_CONFIG.log_file_desc = stdout;
+    SRV_CONFIG.log_level = 0;
+    SRV_CONFIG.help = false;
 }
 
 int main(int argc, char *argv[])
 {
     int srv_sock, srv_port, n_w;
     int ret, i;
+
+    init_srv_config_default();
 
     ret = parse_srv_config();
     if (ret < 0) {
