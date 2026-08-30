@@ -97,7 +97,7 @@ int main(int argc, char *argv[])
 
     srv_sock = create_listening_socket(srv_port);
     if (srv_sock < 0) {
-        p_error("Srv: main: creation of socket failed");
+        LOG(LOG_ERROR, "creation of socket failed");
         exit(EXIT_FAILURE);
     }
 

@@ -33,16 +33,16 @@ void handle_one_connection(void)
     ssize_t to_recv = RECV_BUF_SIZE, to_send = strlen(send_buf);
     ssize_t n_recv, n_send;
 
-    pr_debug("Srv: %s(): start conn_sock = %d, conn = %p\n", __func__,
+    LOG(LOG_INFO1, "start conn_sock = %d, conn = %p\n",
             p_conn_queue.curr_conn->conn_sock, p_conn_queue.curr_conn);
 
     /* Turn new connection socket to non-blocking mode */
     if (set_nonblock(p_conn_queue.curr_conn->conn_sock)) {
-        p_error("Srv: set nonblocking for conn_sock failed");
+        LOG(LOG_ERROR, "set nonblocking for conn_sock failed");
         exit(EXIT_FAILURE);
     }
     if (set_async(p_conn_queue.curr_conn->conn_sock)) {
-        p_error("Srv: set async for conn_sock failed");
+        LOG(LOG_ERROR, "set async for conn_sock failed");
         exit(EXIT_FAILURE);
     }
 
@@ -53,21 +53,19 @@ void handle_one_connection(void)
      * and switch back to main_ctx
      */
     if (!n_recv) {
-        pr_debug("Srv: %s(): received empty buf from client,"
-                 " close connection and switch back to main_ctx\n",
-                 __func__);
+        LOG(LOG_INFO1, "received empty buf from client,"
+                " close connection and switch back to main_ctx\n");
         curr_conn_close(&p_conn_queue);
         swap_to_main_ctx(&p_conn_queue);
     }
 
-    pr_debug("Srv: %s(): received from client:\n %s\n",
-             __func__, recv_buf);
+    LOG(LOG_INFO1, "received from client:\n %s\n", recv_buf);
 
     /* Send http response to client */
     n_send = send_http_msg(send_buf, to_send);
     if (n_send == to_send) {
-        pr_debug("Srv: %s(): response sent to client\n", __func__);
-        pr_debug("Srv: %s(): end conn_sock = %d, conn = %p\n", __func__,
+        LOG(LOG_INFO1, "response sent to client\n");
+        LOG(LOG_INFO1, "end conn_sock = %d, conn = %p\n",
             p_conn_queue.curr_conn->conn_sock, p_conn_queue.curr_conn);
     }
 
@@ -106,13 +104,13 @@ void handle_connections_routine(int srv_sock)
 
     /* Set non-blocking state for listening srv socket */
     if (set_nonblock(srv_sock)) {
-        p_error("Srv: set nonblocking for listening socket failed");
+        LOG(LOG_ERROR, "set nonblocking for listening socket failed");
         exit(EXIT_FAILURE);
     }
     /* Create epoll fd for listening srv_sock */
     epoll_fd = epoll_create1(0);
     if (epoll_fd == -1) {
-        p_error("Srv: failed to create epoll_fd");
+        LOG(LOG_ERROR, "failed to create epoll_fd");
         exit(EXIT_FAILURE);
     }
     /* Configure epoll input events */
@@ -120,16 +118,16 @@ void handle_connections_routine(int srv_sock)
     epoll_event.data.fd = srv_sock;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, srv_sock,
                   &epoll_event) == -1) {
-        p_error("Srv: failed to set polling for srv_sock");
+        LOG(LOG_ERROR, "failed to set polling for srv_sock");
         exit(EXIT_FAILURE);
     }
     /* Start listening for incoming connections */
     if (listen(srv_sock, SOMAXCONN) < 0) {
-        p_error("Srv: listen failed");
+        LOG(LOG_ERROR, "listen failed");
         exit(EXIT_FAILURE);
     }
-    pr_debug("Srv: %s(): listening srv_sock %d in process %d\n",
-            __func__, srv_sock, getpid());
+    LOG(LOG_INFO1, "listening srv_sock %d in process %d\n",
+            srv_sock, getpid());
 
     all_start = time(NULL);
 
@@ -151,31 +149,31 @@ void handle_connections_routine(int srv_sock)
             conn_sock = accept(srv_sock, (struct sockaddr *)&address,
                                (socklen_t *)&addrlen);
             if (conn_sock >= 0) {
-                pr_debug("Srv: %s(): accepted new conn_sock = %d "
-                         "in cycle\n", __func__, conn_sock);
+                LOG(LOG_INFO1, "accepted new conn_sock = %d "
+                         "in cycle\n", conn_sock);
 
                 if (create_new_conn(conn_sock)) {
-                    p_error("Srv: create new conn failed in cycle");
+                    LOG(LOG_ERROR, "create new conn failed in cycle");
                     exit(EXIT_FAILURE);
                 }
             } else {
-                pr_debug("Srv: %s(): new conn not accepted, go to "
-                         "handle existing connections\n", __func__);
+                LOG(LOG_INFO2, "new conn not accepted, go to "
+                         "handle existing connections\n");
             }
         } else if (ret == 0) {
-            pr_debug("Srv: %s(): no incoming connections, go to handle"
-                     " existing connections active %d, inactive %d\n",
-                     __func__, p_conn_queue.active_conn_cnt,
-                     p_conn_queue.inactive_conn_cnt);
+            LOG(LOG_INFO2, "no incoming connections, go to handle"
+                    " existing connections active %d, inactive %d\n",
+                    p_conn_queue.active_conn_cnt,
+                    p_conn_queue.inactive_conn_cnt);
         } else {
-            p_error("Srv: epoll_pwait for srv_sock failed");
+            LOG(LOG_ERROR, "epoll_pwait for srv_sock failed");
             exit(EXIT_FAILURE);
         }
 
         /* Handle all connections in conn queue */
         qlist_foreach_entry_safe(&p_conn_queue.qconn_list, conn, conn_n, qlist) {
             if ((ret = swap_to_conn_ctx(&p_conn_queue, conn))) {
-                p_error("Srv: failed to switch to conn ctx\n");
+                LOG(LOG_ERROR, "failed to switch to conn ctx\n");
                 exit(EXIT_FAILURE);
             }
 

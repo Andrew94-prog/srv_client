@@ -7,6 +7,7 @@
 
 #include "srv_send_recv.h"
 #include "srv_conn_ctxt.h"
+#include "srv_config.h"
 #include "srv_defs.h"
 
 static bool is_http_message_end(char *recv_buf, ssize_t n_recv)
@@ -32,18 +33,18 @@ ssize_t recv_http_msg(char *recv_buf, ssize_t to_recv)
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 if (curr_conn_timeout(&p_conn_queue,
                                       MAX_ACTIVE_TIMEOUT)) {
-                    pr_debug("Srv: %s(): recv async, keep inactivate "
+                    LOG(LOG_INFO2, "recv async, keep inactivate "
                             "conn_sock = %d, curr_conn = %p\n",
-                            __func__, p_conn_queue.curr_conn->conn_sock,
+                            p_conn_queue.curr_conn->conn_sock,
                             p_conn_queue.curr_conn);
                     curr_conn_set_inactive(&p_conn_queue);
                 }
 
                 if (curr_conn_timeout(&p_conn_queue,
                                       MAX_INACTIVE_TIMEOUT)) {
-                    pr_debug("Srv: %s(): recv async, close "
+                    LOG(LOG_INFO2, "recv async, close "
                             "conn_sock = %d, curr_conn = %p\n",
-                            __func__, p_conn_queue.curr_conn->conn_sock,
+                            p_conn_queue.curr_conn->conn_sock,
                             p_conn_queue.curr_conn);
                     curr_conn_close(&p_conn_queue);
                 }
@@ -53,12 +54,12 @@ ssize_t recv_http_msg(char *recv_buf, ssize_t to_recv)
                 if (ret == 0) {
                     continue;
                 } else {
-                    p_error("Srv: switch ctx from client recv to"
+                    LOG(LOG_ERROR, "switch ctx from client recv to"
                            " main_ctx failed with unknown error");
                     exit(EXIT_FAILURE);
                 }
             } else {
-                p_error("Srv: recv from client failed, close connection"
+                LOG(LOG_ERROR, "recv from client failed, close connection"
                        " and switch back to main_ctx");
                 curr_conn_close(&p_conn_queue);
                 swap_to_main_ctx(&p_conn_queue);
@@ -70,8 +71,7 @@ ssize_t recv_http_msg(char *recv_buf, ssize_t to_recv)
             curr_conn_update_active(&p_conn_queue);
             completed = is_http_message_end(recv_buf, n_recv);
         } else {
-            pr_debug("Srv: %s(): recv 0 bytes from client, end\n",
-                     __func__);
+            LOG(LOG_ERROR, "recv 0 bytes from client, end\n");
             completed = true;
         }
     }
@@ -94,18 +94,18 @@ ssize_t send_http_msg(const char *send_buf, ssize_t to_send)
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 if (curr_conn_timeout(&p_conn_queue,
                                       MAX_ACTIVE_TIMEOUT)) {
-                    pr_debug("Srv: %s(): send async, keep inactive "
+                    LOG(LOG_INFO2, "send async, keep inactive "
                             "conn_sock = %d, curr_conn = %p\n",
-                            __func__, p_conn_queue.curr_conn->conn_sock,
+                            p_conn_queue.curr_conn->conn_sock,
                             p_conn_queue.curr_conn);
                     curr_conn_set_inactive(&p_conn_queue);
                 }
 
                 if (curr_conn_timeout(&p_conn_queue,
                                       MAX_INACTIVE_TIMEOUT)) {
-                    pr_debug("Srv: %s(): send async, close "
+                    LOG(LOG_INFO2, "send async, close "
                             "conn_sock = %d, curr_conn = %p\n",
-                            __func__, p_conn_queue.curr_conn->conn_sock,
+                            p_conn_queue.curr_conn->conn_sock,
                             p_conn_queue.curr_conn);
                     curr_conn_close(&p_conn_queue);
                 }
@@ -115,12 +115,12 @@ ssize_t send_http_msg(const char *send_buf, ssize_t to_send)
                 if (ret == 0) {
                     continue;
                 } else {
-                    p_error("Srv: switch ctx from client send to"
+                    LOG(LOG_ERROR, "switch ctx from client send to"
                            " main_ctx failed with unknown error");
                     exit(EXIT_FAILURE);
                 }
             } else {
-                p_error("Srv: write to client failed");
+                LOG(LOG_ERROR, "write to client failed");
                 exit(EXIT_FAILURE);
             }
         } else if (count > 0) {
@@ -128,8 +128,7 @@ ssize_t send_http_msg(const char *send_buf, ssize_t to_send)
             to_send -= count;
             curr_conn_update_active(&p_conn_queue);
         } else {
-            pr_debug("Srv: %s(): sent 0 bytes to client, end\n",
-                     __func__);
+            LOG(LOG_INFO2, "sent 0 bytes to client, end\n");
             completed = true;
         }
     }

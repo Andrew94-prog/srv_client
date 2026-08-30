@@ -1,24 +1,6 @@
 #ifndef SRV_DEFS_H
 #define SRV_DEFS_H
 
-//#define DBG
-
-#ifdef DBG
-#define pr_debug(...) 			\
-({					\
-	printf("(%d) ", getpid());	\
-	printf(__VA_ARGS__);		\
-})
-#else
-#define pr_debug(...)
-#endif
-
-#define p_error(...)			\
-({					\
-	printf("(%d) ", getpid());	\
-	perror(__VA_ARGS__);		\
-})
-
 #define RECV_BUF_SIZE		1024
 #define SEND_BUF_SIZE		1024
 
@@ -37,6 +19,33 @@ enum {
 	LOG_INFO1 = 1,
 	LOG_INFO2 = 2
 };
+
+#define LOG(lvl, ...)							\
+({												\
+	FILE *fout = SRV_CONFIG.log_file_desc;		\
+												\
+	if (lvl <= SRV_CONFIG.log_level) {			\
+		fprintf(fout, "(%d) ", getpid());		\
+		switch (lvl) {							\
+			case LOG_ERROR:						\
+			fprintf(fout, "ERROR: ");			\
+			break;								\
+			case LOG_INFO1:						\
+			fprintf(fout, "INFO1: ");			\
+			break;								\
+			case LOG_INFO2:						\
+			fprintf(fout, "INFO2: ");			\
+			break;								\
+			default:							\
+			fprintf(fout, "_____: ");			\
+			break;								\
+		}										\
+		fprintf(fout, "%s(): ", __func__);		\
+		fprintf(fout, __VA_ARGS__);				\
+		if (lvl == LOG_ERROR)					\
+			fflush(fout);						\
+	}											\
+})
 
 #define HTTP_RESPONSE_MSG "HTTP/1.1 200 OK\n" \
 			"Content-Type: text/html; charset=UTF-8\n" \

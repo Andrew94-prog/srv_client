@@ -9,6 +9,7 @@
 
 #include "srv_conn_ctxt.h"
 #include "srv_routines.h"
+#include "srv_config.h"
 #include "srv_defs.h"
 #include "srv_qlist.h"
 
@@ -34,14 +35,14 @@ static conn_t *alloc_conn_ctx_mem(void)
     conn_stack = mmap(NULL, STACK_SIZE, PROT_READ | PROT_WRITE,
                       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (conn_stack == MAP_FAILED) {
-        p_error("Srv: failed to allocate stack for connection\n");
+        LOG(LOG_ERROR, "failed to allocate stack for connection\n");
         return NULL;
     }
 
     /* Enqueue new connection with context */
     conn = malloc(sizeof(conn_t));
     if (!conn) {
-        p_error("Srv: allocation on ctx for connection failed\n");
+        LOG(LOG_ERROR, "allocation on ctx for connection failed\n");
         return NULL;
     }
 
@@ -72,7 +73,7 @@ static void fill_conn_ctx_cache(void)
     }
 
     if (p_conn_ctx_cache.cnt < MIN_CONN_CTX_CACHE_CNT)
-        p_error("Srv: conn ctx cache was not properly filled\n");
+        LOG(LOG_ERROR, "conn ctx cache was not properly filled\n");
 }
 
 static conn_t *alloc_conn_ctx(void)
@@ -214,19 +215,18 @@ int create_new_conn(int conn_sock)
 {
     conn_t *conn;
 
-    pr_debug("Srv: %s(): new connection conn_sock = %d\n",
-                __func__, conn_sock);
+    LOG(LOG_INFO1, "new connection conn_sock = %d\n", conn_sock);
 
     conn = alloc_conn_ctx();
     if (!conn) {
-        p_error("Srv: allocation of new conn ctx failed\n");
+        LOG(LOG_ERROR, "allocation of new conn ctx failed\n");
         return -1;
     }
     init_new_conn_ctx(conn, conn_sock);
     add_conn_to_queue(&p_conn_queue, conn);
 
-    pr_debug("Srv: %s(): created new connection conn_sock = %d,"
-            " conn = %p\n", __func__, conn_sock, conn);
+    LOG(LOG_INFO1, "created new connection conn_sock = %d,"
+            " conn = %p\n", conn_sock, conn);
 
     return 0;
 }
