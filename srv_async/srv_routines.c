@@ -85,6 +85,13 @@ void handle_connections_routine(int srv_sock)
     sigaddset(&sig_set, SIGIO);
     sigprocmask(SIG_BLOCK, &sig_set, NULL);
 
+    /*
+     * Set default action for SIGINT signal in all workers
+     * to avoid calling of SIGINT handler set by server
+     * main process.
+     */
+    signal(SIGINT, SIG_DFL);
+
     /* Init connection queue struct for current server process */
     init_conn_queue(&p_conn_queue);
     /* Init conn ctx cache for fast allocation */

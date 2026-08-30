@@ -32,6 +32,12 @@
 #define MIN_CONN_CTX_CACHE_CNT	50
 #define MAX_CONN_CTX_CACHE_CNT	300
 
+enum {
+	LOG_ERROR = 0,
+	LOG_INFO1 = 1,
+	LOG_INFO2 = 2
+};
+
 #define HTTP_RESPONSE_MSG "HTTP/1.1 200 OK\n" \
 			"Content-Type: text/html; charset=UTF-8\n" \
 			"Content-Length: 156\n" \

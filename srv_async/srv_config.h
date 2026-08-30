@@ -3,9 +3,14 @@
 
 #include <stdbool.h>
 
+#define MAX_LINE_LEN 1024
+
 typedef struct srv_config {
     int port;
     int num_workers;
+    char *log_file_name;
+    FILE *log_file_desc;
+    int log_level;
     bool help;
 } srv_config_t;
 

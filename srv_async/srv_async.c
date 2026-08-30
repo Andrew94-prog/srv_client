@@ -3,16 +3,61 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <sys/wait.h>
+#include <signal.h>
 
 #include "srv_defs.h"
 #include "srv_routines.h"
 #include "srv_sock.h"
 #include "srv_config.h"
 
+static void wait_for_workers(void)
+{
+    int ret, status;
+    FILE *fout = SRV_CONFIG.log_file_desc ? SRV_CONFIG.log_file_desc : stdout;
+
+    while ((ret = wait(&status)) > 0) {
+        fprintf(fout, "%s(): %d worker %s %d\n", __func__, ret,
+               WIFEXITED(status) ? "exited with code" :
+                                "terminated by signal",
+               WIFEXITED(status) ? WEXITSTATUS(status) :
+                                WTERMSIG(status));
+    }
+}
+
+static void close_srv_log(void)
+{
+    if (SRV_CONFIG.log_file_desc) {
+        fclose(SRV_CONFIG.log_file_desc);
+        SRV_CONFIG.log_file_desc = NULL;
+    }
+}
+
+static void handle_sigint(int sig)
+{
+    wait_for_workers();
+    close_srv_log();
+}
+
+static void print_srv_config(void)
+{
+    FILE *fout = SRV_CONFIG.log_file_desc ? SRV_CONFIG.log_file_desc : stdout;
+
+    fprintf(fout, "Server started with parameters:\n");
+    fprintf(fout, "port: %d\n", SRV_CONFIG.port);
+    fprintf(fout, "num_workers: %d\n", SRV_CONFIG.num_workers);
+    if (SRV_CONFIG.log_file_name)
+        fprintf(fout, "log_file_name: %s\n", SRV_CONFIG.log_file_name);
+    else
+        fprintf(fout, "log_file_name: stdout\n");
+    fprintf(fout, "log_file_desc: %p\n", SRV_CONFIG.log_file_desc);
+    fprintf(fout, "\n");
+    fflush(fout);
+}
+
 int main(int argc, char *argv[])
 {
     int srv_sock, srv_port, n_w;
-    int ret, i, status;
+    int ret, i;
 
     ret = parse_srv_config();
     if (ret < 0) {
@@ -31,6 +76,10 @@ int main(int argc, char *argv[])
         return 0;
     }
 
+    print_srv_config();
+
+    signal(SIGINT, handle_sigint);
+
     srv_port = SRV_CONFIG.port;
     n_w = SRV_CONFIG.num_workers;
 
@@ -46,13 +95,8 @@ int main(int argc, char *argv[])
        }
     }
 
-    while ((ret = wait(&status)) > 0) {
-       printf("Srv: main: %d worker %s %d\n", ret,
-              WIFEXITED(status) ? "exited with code" :
-                                  "terminated by signal",
-              WIFEXITED(status) ? WEXITSTATUS(status) :
-                                  WTERMSIG(status));
-    }
+    wait_for_workers();
+    close_srv_log();
 
     return 0;
 }
