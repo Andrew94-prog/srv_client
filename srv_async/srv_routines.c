@@ -7,7 +7,6 @@
 #include <signal.h>
 #include <time.h>
 #include <poll.h>
-#include <stdatomic.h>
 #include <sys/epoll.h>
 
 #include "srv_defs.h"
@@ -17,7 +16,7 @@
 #include "srv_qlist.h"
 #include "srv_config.h"
 
-static atomic_ulong n_conn = 0;
+static unsigned long n_conn = 0;
 static unsigned long prev_n_conn = 0;
 
 static void sigint_handler(int sig)
@@ -70,7 +69,7 @@ void handle_one_connection(void)
     }
 
     /* Close connection with client */
-    atomic_fetch_add(&n_conn, 1);
+    n_conn++;
     curr_conn_close(&p_conn_queue);
     swap_to_main_ctx(&p_conn_queue);
 }
@@ -188,8 +187,8 @@ void handle_connections_routine(int srv_sock)
         /* Measure number of connections handled per second */
         if (all_end - all_start >= 1) {
             printf("(%d) Srv: n_conn/s = %ld\n",
-                    getpid(), atomic_load(&n_conn) - prev_n_conn);
-            prev_n_conn = atomic_load(&n_conn);
+                    getpid(), n_conn - prev_n_conn);
+            prev_n_conn = n_conn;
             all_start = all_end;
         }
     }
