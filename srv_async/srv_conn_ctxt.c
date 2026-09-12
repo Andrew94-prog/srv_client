@@ -32,7 +32,7 @@ static conn_t *alloc_conn_ctx_mem(void)
     conn_t *conn;
 
     /* Create context with new stack for new connection  */
-    conn_stack = mmap(NULL, STACK_SIZE, PROT_READ | PROT_WRITE,
+    conn_stack = (char *) mmap(NULL, STACK_SIZE, PROT_READ | PROT_WRITE,
                       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (conn_stack == MAP_FAILED) {
         LOG(LOG_ERROR, "failed to allocate stack for connection\n");
@@ -40,7 +40,7 @@ static conn_t *alloc_conn_ctx_mem(void)
     }
 
     /* Enqueue new connection with context */
-    conn = malloc(sizeof(conn_t));
+    conn = (conn_t *) malloc(sizeof(conn_t));
     if (!conn) {
         LOG(LOG_ERROR, "allocation on ctx for connection failed\n");
         return NULL;

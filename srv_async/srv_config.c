@@ -43,7 +43,7 @@ static int parse_range_value(const char *val_str, int *val, int min, int max,
 
 static int parse_log_file_name(const char *val_str, bool is_config)
 {
-    SRV_CONFIG.log_file_name = malloc(strlen(val_str) + 1);
+    SRV_CONFIG.log_file_name = (char *) malloc(strlen(val_str) + 1);
     if (!SRV_CONFIG.log_file_name) {
         fprintf(stderr, "%s(): could not allocate %ld bytes for "
                 "log_file name %s in %s\n", __func__,

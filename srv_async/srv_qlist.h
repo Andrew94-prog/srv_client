@@ -18,7 +18,7 @@ struct qlist_head {
     ((head)->next == (head))
 
 #define qlist_entry(type, list_field, item_ptr)                         \
-    ((type *)((void *)(item_ptr) - offsetof(type, list_field)))
+    ((type *)((char *)(item_ptr) - offsetof(type, list_field)))
 
 #define qlist_next_entry(pos, list_field)                               \
     qlist_entry(typeof(*pos), list_field, pos->list_field.next)
