@@ -26,11 +26,6 @@ static void sigint_handler(int sig)
 
 void handle_one_connection(void)
 {
-    char recv_buf[RECV_BUF_SIZE + 1] = {0};
-    const char send_buf[SEND_BUF_SIZE + 1] = HTTP_RESPONSE_MSG;
-    ssize_t to_recv = RECV_BUF_SIZE, to_send = strlen(send_buf);
-    ssize_t n_recv, n_send;
-
     LOG(LOG_INFO1, "start conn_sock = %d, conn = %p\n",
             p_conn_queue.curr_conn->conn_sock, p_conn_queue.curr_conn);
 
@@ -44,31 +39,21 @@ void handle_one_connection(void)
         exit(EXIT_FAILURE);
     }
 
-    /* Receive http request from client */
-    n_recv = recv_http_msg(recv_buf, to_recv);
     /*
-     * If nothing was received from client, then close connection
-     * and switch back to main_ctx
+     * Handle all http requests received from client one by one
+     * (http keep-alive). recv_http_msg() receives request, forms
+     * response for it by make_response() and sends it to client.
+     * Connection is closed when client closes it, requests
+     * "Connection: close" or recv/send timeout occurs
      */
-    if (!n_recv) {
-        LOG(LOG_INFO1, "received empty buf from client,"
-                " close connection and switch back to main_ctx\n");
-        curr_conn_close(&p_conn_queue);
-        swap_to_main_ctx(&p_conn_queue);
-    }
+    while (handle_one_client_request()) {}
 
-    LOG(LOG_INFO1, "received from client:\n %s\n", recv_buf);
+    n_conn++;
 
-    /* Send http response to client */
-    n_send = send_http_msg(send_buf, to_send);
-    if (n_send == to_send) {
-        LOG(LOG_INFO1, "response sent to client\n");
-        LOG(LOG_INFO1, "end conn_sock = %d, conn = %p\n",
-            p_conn_queue.curr_conn->conn_sock, p_conn_queue.curr_conn);
-    }
+    LOG(LOG_INFO1, "end connection conn_sock = %d, conn = %p\n",
+        p_conn_queue.curr_conn->conn_sock, p_conn_queue.curr_conn);
 
     /* Close connection with client */
-    n_conn++;
     curr_conn_close(&p_conn_queue);
     swap_to_main_ctx(&p_conn_queue);
 }
@@ -134,7 +119,14 @@ void handle_connections_routine(int srv_sock)
         if (p_conn_queue.active_conn_cnt) {
             epoll_timeout = 0;
         } else if (p_conn_queue.inactive_conn_cnt) {
-            epoll_timeout = MAX_INACTIVE_TIMEOUT / 1000UL;
+            /*
+             * Only listening srv_sock is registered in epoll, so data
+             * arriving on connection sockets does not wake epoll_pwait
+             * up. Poll inactive connections with small timeout to
+             * handle data received by them in time, inactive timeout
+             * for them is checked inside connection coroutines
+             */
+            epoll_timeout = MAX_ACTIVE_TIMEOUT / 1000UL;
         } else {
             epoll_timeout = -1;
         }

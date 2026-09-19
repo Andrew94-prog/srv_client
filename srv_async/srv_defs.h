@@ -1,10 +1,13 @@
 #ifndef SRV_DEFS_H
 #define SRV_DEFS_H
 
-#define RECV_BUF_SIZE		1024
-#define SEND_BUF_SIZE		1024
+/* Size of "fast" buffer for receiving of raw http message data.
+ * It restricts maximum overall size of http headers */
+#define RECV_BUF_SIZE		(4096 + 4)
+/* Maximum size of http message body */
+#define MAX_HTTP_BODY_SIZE	(32UL * 1024 * 1024)
 
-#define STACK_SIZE		16384
+#define STACK_SIZE		32768
 #define MAX_ACTIVE_TIMEOUT	100000000
 #define MAX_INACTIVE_TIMEOUT	3000000000
 #define MAX_NUM_WORKERS		1000
@@ -46,22 +49,5 @@ enum {
 			fflush(fout);						\
 	}											\
 })
-
-#define HTTP_RESPONSE_MSG "HTTP/1.1 200 OK\n" \
-			"Content-Type: text/html; charset=UTF-8\n" \
-			"Content-Length: 156\n" \
-			"Date: Sat, 04 Oct 2025 14:51:00 GMT\n" \
-			"Server: my_srv_asyn/1.0 (Ubuntu)\n" \
-			"\n" \
-			"<!DOCTYPE html>\n" \
-			"<html>\n" \
-			"<head>\n" \
-			"    <title>Example Page</title>\n" \
-			"</head>\n" \
-			"<body>\n" \
-			"    <h1>Welcome!</h1>\n" \
-			"    <p>This is an example HTML page.</p>\n" \
-			"</body>\n" \
-			"</html>\n"
 
 #endif /* SRV_DEFS_H */

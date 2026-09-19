@@ -1,7 +1,13 @@
 #ifndef SRV_SEND_RECV_H
 #define SRV_SEND_RECV_H
 
-ssize_t recv_http_msg(char *recv_buf, ssize_t to_recv);
-ssize_t send_http_msg(const char *send_buf, ssize_t to_send);
+#include <memory>
+
+#include "http_msg.h"
+
+std::shared_ptr<http_request_msg> recv_http_msg(void);
+ssize_t send_http_msg(std::shared_ptr<http_response_msg> resp);
+
+bool handle_one_client_request(void);
 
 #endif /* SRV_SEND_RECV_H */

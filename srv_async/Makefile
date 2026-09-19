@@ -1,11 +1,15 @@
-COBJS := srv_async.o srv_conn_ctxt.o srv_routines.o srv_send_recv.o srv_sock.o srv_config.o
+COBJS := srv_async.o srv_conn_ctxt.o srv_send_recv.o srv_sock.o srv_config.o srv_routines.o
+CPPOBJS := http_msg.o
 
 CFLAGS=-Wall
 
 %.o: %.c
 	$(CXX) $(CFLAGS) -O2 -c $<
 
-srv_async: $(COBJS)
+%.o: %.cpp
+	$(CXX) $(CFLAGS) -O2 -c $<
+
+srv_async: $(COBJS) $(CPPOBJS)
 	$(CXX) $^ -o $@
 
 clean:

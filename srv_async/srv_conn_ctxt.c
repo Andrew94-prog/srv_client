@@ -159,8 +159,10 @@ void init_conn_ctx_cache(conn_ctx_cache_t *conn_ctx_cache)
 
 void curr_conn_close(conn_queue_t *conn_queue)
 {
-    close(conn_queue->curr_conn->conn_sock);
-    conn_queue->curr_conn->is_completed = true;
+    if (!conn_queue->curr_conn->is_completed) {
+        close(conn_queue->curr_conn->conn_sock);
+        conn_queue->curr_conn->is_completed = true;
+    }
 }
 
 void curr_conn_set_active(conn_queue_t *conn_queue)
