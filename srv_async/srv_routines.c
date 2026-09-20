@@ -62,16 +62,18 @@ void handle_connections_routine(int srv_sock)
 {
     struct sockaddr_in address;
     int addrlen = sizeof(address), ret, conn_sock;
-    sigset_t sig_set;
+    sigset_t sig_block, sig_wait;
     struct epoll_event epoll_event;
     int epoll_timeout, epoll_fd;
     time_t all_start, all_end;
     conn_t *conn, *conn_n;
 
     /* Block SIGIO signal for waiting it via sigwait */
-    sigemptyset(&sig_set);
-    sigaddset(&sig_set, SIGIO);
-    sigprocmask(SIG_BLOCK, &sig_set, NULL);
+    sigemptyset(&sig_block);
+    sigaddset(&sig_block, SIGIO);
+    sigprocmask(SIG_BLOCK, &sig_block, NULL);
+    signal(SIGIO, SIG_IGN);
+    sigemptyset(&sig_wait);
 
     /*
      * Set new action for SIGINT signal in all workers
@@ -118,22 +120,13 @@ void handle_connections_routine(int srv_sock)
     while (1) {
         if (p_conn_queue.active_conn_cnt) {
             epoll_timeout = 0;
-        } else if (p_conn_queue.inactive_conn_cnt) {
-            /*
-             * Only listening srv_sock is registered in epoll, so data
-             * arriving on connection sockets does not wake epoll_pwait
-             * up. Poll inactive connections with small timeout to
-             * handle data received by them in time, inactive timeout
-             * for them is checked inside connection coroutines
-             */
-            epoll_timeout = MAX_ACTIVE_TIMEOUT / 1000UL;
         } else {
             epoll_timeout = -1;
         }
 
-	/* Wait for new connections on listening sokcet */
-	ret = epoll_pwait(epoll_fd, &epoll_event, 1,
-                          epoll_timeout, &sig_set);
+	    /* Wait for new connections on listening sokcet */
+	    ret = epoll_pwait(epoll_fd, &epoll_event, 1,
+                          epoll_timeout, &sig_wait);
         if (ret > 0) {
             /* Accept new connection and create new socket for it */
             conn_sock = accept(srv_sock, (struct sockaddr *)&address,
@@ -156,8 +149,10 @@ void handle_connections_routine(int srv_sock)
                     p_conn_queue.active_conn_cnt,
                     p_conn_queue.inactive_conn_cnt);
         } else {
-            LOG(LOG_ERROR, "epoll_pwait for srv_sock failed");
-            exit(EXIT_FAILURE);
+            if (errno != EINTR) {
+                LOG(LOG_ERROR, "epoll_pwait for srv_sock failed, errno %d\n", errno);
+                exit(EXIT_FAILURE);
+            }
         }
 
         /* Handle all connections in conn queue */
