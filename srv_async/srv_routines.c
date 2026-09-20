@@ -150,7 +150,8 @@ void handle_connections_routine(int srv_sock)
                     p_conn_queue.inactive_conn_cnt);
         } else {
             if (errno != EINTR) {
-                LOG(LOG_ERROR, "epoll_pwait for srv_sock failed, errno %d\n", errno);
+                LOG(LOG_ERROR, "epoll_pwait for srv_sock failed, errno %d\n",
+                    errno);
                 exit(EXIT_FAILURE);
             }
         }
