@@ -34,23 +34,24 @@ typedef struct ConnCtxCache {
     int cnt;
 } conn_ctx_cache_t;
 
-extern conn_queue_t p_conn_queue;
-extern conn_ctx_cache_t p_conn_ctx_cache;
 
+void add_conn_to_queue(conn_t *conn);
+void remove_conn_from_queue(conn_t *conn);
+void init_conn_queue(void);
+void init_conn_ctx_cache(void);
 
-void add_conn_to_queue(conn_queue_t *conn_queue, conn_t *conn);
-void remove_conn_from_queue(conn_queue_t *conn_queue, conn_t *conn);
-void init_conn_queue(conn_queue_t *conn_queue);
-void init_conn_ctx_cache(conn_ctx_cache_t *conn_ctx_cache);
-
-void curr_conn_close(conn_queue_t *conn_queue);
-void curr_conn_set_active(conn_queue_t *conn_queue);
-void curr_conn_set_inactive(conn_queue_t *conn_queue);
-bool curr_conn_timeout(conn_queue_t *conn_queue, unsigned long timeout);
-void curr_conn_update_active(conn_queue_t *conn_queue);
-int swap_to_main_ctx(conn_queue_t *conn_queue);
-int swap_to_conn_ctx(conn_queue_t *conn_queue, conn_t *conn);
+void curr_conn_close(void);
+void curr_conn_set_active(void);
+void curr_conn_set_inactive(void);
+bool curr_conn_timeout(unsigned long timeout);
+void curr_conn_update_active(void);
+int swap_to_main_ctx(void);
+int swap_to_conn_ctx(conn_t *conn);
 void free_closed_conn(conn_t *conn);
 int create_new_conn(int conn_sock);
+
+conn_queue_t *conn_queue(void);
+conn_t *curr_conn(void);
+int curr_conn_sock(void);
 
 #endif /* SRV_CONN_QUEUE_H */

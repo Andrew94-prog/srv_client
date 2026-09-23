@@ -27,14 +27,14 @@ static void sigint_handler(int sig)
 void handle_one_connection(void)
 {
     LOG(LOG_INFO1, "start conn_sock = %d, conn = %p\n",
-            p_conn_queue.curr_conn->conn_sock, p_conn_queue.curr_conn);
+            curr_conn_sock(), curr_conn());
 
     /* Turn new connection socket to non-blocking mode */
-    if (set_nonblock(p_conn_queue.curr_conn->conn_sock)) {
+    if (set_nonblock(curr_conn_sock())) {
         LOG(LOG_ERROR, "set nonblocking for conn_sock failed");
         exit(EXIT_FAILURE);
     }
-    if (set_async(p_conn_queue.curr_conn->conn_sock)) {
+    if (set_async(curr_conn_sock())) {
         LOG(LOG_ERROR, "set async for conn_sock failed");
         exit(EXIT_FAILURE);
     }
@@ -51,11 +51,11 @@ void handle_one_connection(void)
     n_conn++;
 
     LOG(LOG_INFO1, "end connection conn_sock = %d, conn = %p\n",
-        p_conn_queue.curr_conn->conn_sock, p_conn_queue.curr_conn);
+        curr_conn_sock(), curr_conn());
 
     /* Close connection with client */
-    curr_conn_close(&p_conn_queue);
-    swap_to_main_ctx(&p_conn_queue);
+    curr_conn_close();
+    swap_to_main_ctx();
 }
 
 void handle_connections_routine(int srv_sock)
@@ -83,9 +83,9 @@ void handle_connections_routine(int srv_sock)
     signal(SIGINT, sigint_handler);
 
     /* Init connection queue struct for current server process */
-    init_conn_queue(&p_conn_queue);
+    init_conn_queue();
     /* Init conn ctx cache for fast allocation */
-    init_conn_ctx_cache(&p_conn_ctx_cache);
+    init_conn_ctx_cache();
 
     /* Set non-blocking state for listening srv socket */
     if (set_nonblock(srv_sock)) {
@@ -118,7 +118,7 @@ void handle_connections_routine(int srv_sock)
 
     /* Accept incoming connections in a loop */
     while (1) {
-        if (p_conn_queue.active_conn_cnt) {
+        if (conn_queue()->active_conn_cnt) {
             epoll_timeout = 0;
         } else {
             epoll_timeout = -1;
@@ -146,8 +146,8 @@ void handle_connections_routine(int srv_sock)
         } else if (ret == 0) {
             LOG(LOG_INFO2, "no incoming connections, go to handle"
                     " existing connections active %d, inactive %d\n",
-                    p_conn_queue.active_conn_cnt,
-                    p_conn_queue.inactive_conn_cnt);
+                    conn_queue()->active_conn_cnt,
+                    conn_queue()->inactive_conn_cnt);
         } else {
             if (errno != EINTR) {
                 LOG(LOG_ERROR, "epoll_pwait for srv_sock failed, errno %d\n",
@@ -157,14 +157,14 @@ void handle_connections_routine(int srv_sock)
         }
 
         /* Handle all connections in conn queue */
-        qlist_foreach_entry_safe(&p_conn_queue.qconn_list, conn, conn_n, qlist) {
-            if ((ret = swap_to_conn_ctx(&p_conn_queue, conn))) {
+        qlist_foreach_entry_safe(&conn_queue()->qconn_list, conn, conn_n, qlist) {
+            if ((ret = swap_to_conn_ctx(conn))) {
                 LOG(LOG_ERROR, "failed to switch to conn ctx\n");
                 exit(EXIT_FAILURE);
             }
 
             if (conn->is_completed || ret) {
-                remove_conn_from_queue(&p_conn_queue, conn);
+                remove_conn_from_queue(conn);
                 free_closed_conn(conn);
             }
         }

@@ -13,8 +13,8 @@
 #include "srv_defs.h"
 #include "srv_qlist.h"
 
-conn_queue_t p_conn_queue;
-conn_ctx_cache_t p_conn_ctx_cache;
+static conn_queue_t p_conn_queue;
+static conn_ctx_cache_t p_conn_ctx_cache;
 
 static unsigned long curr_time(void)
 {
@@ -118,80 +118,80 @@ static void init_new_conn_ctx(conn_t *conn, int conn_sock)
 
 /* --------------------------------------------------------------- */
 
-void add_conn_to_queue(conn_queue_t *conn_queue, conn_t *conn)
+void add_conn_to_queue(conn_t *conn)
 {
-    qlist_add_head(&conn_queue->qconn_list, &conn->qlist);
+    qlist_add_head(&p_conn_queue.qconn_list, &conn->qlist);
 
     if (conn->is_active) {
-        conn_queue->active_conn_cnt++;
+        p_conn_queue.active_conn_cnt++;
     } else {
-        conn_queue->inactive_conn_cnt++;
+        p_conn_queue.inactive_conn_cnt++;
     }
 }
 
-void remove_conn_from_queue(conn_queue_t *conn_queue, conn_t *conn)
+void remove_conn_from_queue(conn_t *conn)
 {
     qlist_del_entry(&conn->qlist);
 
     if (conn->is_active) {
-        conn_queue->active_conn_cnt--;
+        p_conn_queue.active_conn_cnt--;
     } else {
-        conn_queue->inactive_conn_cnt--;
+        p_conn_queue.inactive_conn_cnt--;
     }
 }
 
-void init_conn_queue(conn_queue_t *conn_queue)
+void init_conn_queue(void)
 {
-    qlist_head_init(&conn_queue->qconn_list);
+    qlist_head_init(&p_conn_queue.qconn_list);
 
-    conn_queue->curr_conn = NULL;
-    conn_queue->active_conn_cnt = 0;
-    conn_queue->inactive_conn_cnt = 0;
+    p_conn_queue.curr_conn = NULL;
+    p_conn_queue.active_conn_cnt = 0;
+    p_conn_queue.inactive_conn_cnt = 0;
 }
 
-void init_conn_ctx_cache(conn_ctx_cache_t *conn_ctx_cache)
+void init_conn_ctx_cache(void)
 {
-    qlist_head_init(&conn_ctx_cache->qconn_list);
-    conn_ctx_cache->cnt = 0;
+    qlist_head_init(&p_conn_ctx_cache.qconn_list);
+    p_conn_ctx_cache.cnt = 0;
 
     fill_conn_ctx_cache();
 }
 
-void curr_conn_close(conn_queue_t *conn_queue)
+void curr_conn_close(void)
 {
-    if (!conn_queue->curr_conn->is_completed) {
-        close(conn_queue->curr_conn->conn_sock);
-        conn_queue->curr_conn->is_completed = true;
+    if (!p_conn_queue.curr_conn->is_completed) {
+        close(p_conn_queue.curr_conn->conn_sock);
+        p_conn_queue.curr_conn->is_completed = true;
     }
 }
 
-void curr_conn_set_active(conn_queue_t *conn_queue)
+void curr_conn_set_active(void)
 {
-    if (!conn_queue->curr_conn->is_active) {
-        conn_queue->curr_conn->is_active = true;
-        conn_queue->curr_conn->last_active = curr_time();
-        conn_queue->active_conn_cnt++;
-        conn_queue->inactive_conn_cnt--;
+    if (!p_conn_queue.curr_conn->is_active) {
+        p_conn_queue.curr_conn->is_active = true;
+        p_conn_queue.curr_conn->last_active = curr_time();
+        p_conn_queue.active_conn_cnt++;
+        p_conn_queue.inactive_conn_cnt--;
     }
 }
 
-void curr_conn_set_inactive(conn_queue_t *conn_queue)
+void curr_conn_set_inactive(void)
 {
-    if (conn_queue->curr_conn->is_active) {
-        conn_queue->curr_conn->is_active = false;
-        conn_queue->active_conn_cnt--;
-        conn_queue->inactive_conn_cnt++;
+    if (p_conn_queue.curr_conn->is_active) {
+        p_conn_queue.curr_conn->is_active = false;
+        p_conn_queue.active_conn_cnt--;
+        p_conn_queue.inactive_conn_cnt++;
     }
 }
 
-void curr_conn_update_active(conn_queue_t *conn_queue)
+void curr_conn_update_active(void)
 {
-    conn_queue->curr_conn->last_active = curr_time();
+    p_conn_queue.curr_conn->last_active = curr_time();
 }
 
-bool curr_conn_timeout(conn_queue_t *conn_queue, unsigned long timeout)
+bool curr_conn_timeout(unsigned long timeout)
 {
-    return (curr_time() - conn_queue->curr_conn->last_active > timeout) ?
+    return (curr_time() - p_conn_queue.curr_conn->last_active > timeout) ?
             true : false;
 }
 
@@ -200,17 +200,17 @@ void free_closed_conn(conn_t *conn)
     free_conn_ctx(conn);
 }
 
-int swap_to_main_ctx(conn_queue_t *conn_queue)
+int swap_to_main_ctx(void)
 {
-    return swapcontext(&conn_queue->curr_conn->conn_ctx,
-                        &conn_queue->main_ctx);
+    return swapcontext(&p_conn_queue.curr_conn->conn_ctx,
+                        &p_conn_queue.main_ctx);
 }
 
-int swap_to_conn_ctx(conn_queue_t *conn_queue, conn_t *conn)
+int swap_to_conn_ctx(conn_t *conn)
 {
-    conn_queue->curr_conn = conn;
+    p_conn_queue.curr_conn = conn;
 
-    return swapcontext(&conn_queue->main_ctx, &conn->conn_ctx);
+    return swapcontext(&p_conn_queue.main_ctx, &conn->conn_ctx);
 }
 
 int create_new_conn(int conn_sock)
@@ -225,10 +225,25 @@ int create_new_conn(int conn_sock)
         return -1;
     }
     init_new_conn_ctx(conn, conn_sock);
-    add_conn_to_queue(&p_conn_queue, conn);
+    add_conn_to_queue(conn);
 
     LOG(LOG_INFO1, "created new connection conn_sock = %d,"
             " conn = %p\n", conn_sock, conn);
 
     return 0;
+}
+
+conn_queue_t *conn_queue(void)
+{
+    return &p_conn_queue;
+}
+
+conn_t *curr_conn(void)
+{
+    return p_conn_queue.curr_conn;
+}
+
+int curr_conn_sock(void)
+{
+    return p_conn_queue.curr_conn->conn_sock;
 }

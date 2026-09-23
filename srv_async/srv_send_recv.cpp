@@ -54,26 +54,23 @@ static ssize_t recv_from_curr_conn(char *buf, ssize_t to_recv)
     bool recv_ended = false;
     int ret;
 
-    curr_conn_update_active(&p_conn_queue);
+    curr_conn_update_active();
     while (to_recv && !recv_ended) {
-        count = read(p_conn_queue.curr_conn->conn_sock, buf, to_recv);
+        count = read(curr_conn_sock(), buf, to_recv);
         if (count < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                if (curr_conn_timeout(&p_conn_queue,
-                                      MAX_ACTIVE_TIMEOUT)) {
+                if (curr_conn_timeout(MAX_ACTIVE_TIMEOUT)) {
                     LOG(LOG_INFO2, "recv async, set inactivate "
                             "conn_sock = %d, curr_conn = %p\n",
-                            p_conn_queue.curr_conn->conn_sock,
-                            p_conn_queue.curr_conn);
-                    curr_conn_set_inactive(&p_conn_queue);
+                            curr_conn_sock(), curr_conn());
+                    curr_conn_set_inactive();
                 }
 
                 LOG(LOG_INFO2, "no data to recv from sock, switch to main ctxt"
                     " conn_sock = %d, curr_conn = %p\n",
-                    p_conn_queue.curr_conn->conn_sock,
-                    p_conn_queue.curr_conn);
+                    curr_conn_sock(), curr_conn());
 
-                ret = swap_to_main_ctx(&p_conn_queue);
+                ret = swap_to_main_ctx();
                 if (ret == 0) {
                     continue;
                 } else {
@@ -84,8 +81,8 @@ static ssize_t recv_from_curr_conn(char *buf, ssize_t to_recv)
             } else {
                 LOG(LOG_ERROR, "recv from client failed, close connection"
                        " and switch back to main_ctx");
-                curr_conn_close(&p_conn_queue);
-                swap_to_main_ctx(&p_conn_queue);
+                curr_conn_close();
+                swap_to_main_ctx();
                 /* Should never get here*/
                 return -1;
             }
@@ -93,7 +90,7 @@ static ssize_t recv_from_curr_conn(char *buf, ssize_t to_recv)
             n_recv += count;
             to_recv -= count;
 
-            curr_conn_update_active(&p_conn_queue);
+            curr_conn_update_active();
             recv_ended = is_http_message_end(buf, n_recv);
         } else {
             LOG(LOG_ERROR, "recv 0 bytes from client, end\n");
@@ -111,24 +108,21 @@ static ssize_t send_to_curr_conn(const char *buf, ssize_t to_send)
     int ret;
 
     while (to_send && !send_ended) {
-        count = write(p_conn_queue.curr_conn->conn_sock, buf, to_send);
+        count = write(curr_conn_sock(), buf, to_send);
         if (count < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                if (curr_conn_timeout(&p_conn_queue,
-                                      MAX_ACTIVE_TIMEOUT)) {
+                if (curr_conn_timeout(MAX_ACTIVE_TIMEOUT)) {
                     LOG(LOG_INFO2, "send async, set inactive "
                             "conn_sock = %d, curr_conn = %p\n",
-                            p_conn_queue.curr_conn->conn_sock,
-                            p_conn_queue.curr_conn);
-                    curr_conn_set_inactive(&p_conn_queue);
+                            curr_conn_sock(), curr_conn());
+                    curr_conn_set_inactive();
                 }
 
                 LOG(LOG_INFO2, "no data to send to sock, switch to main ctxt"
                     " conn_sock = %d, curr_conn = %p\n",
-                    p_conn_queue.curr_conn->conn_sock,
-                    p_conn_queue.curr_conn);
+                    curr_conn_sock(), curr_conn());
 
-                ret = swap_to_main_ctx(&p_conn_queue);
+                ret = swap_to_main_ctx();
                 if (ret == 0) {
                     continue;
                 } else {
@@ -139,8 +133,8 @@ static ssize_t send_to_curr_conn(const char *buf, ssize_t to_send)
             } else {
                 LOG(LOG_ERROR, "write to client failed, close connection"
                        " and switch back to main_ctx");
-                curr_conn_close(&p_conn_queue);
-                swap_to_main_ctx(&p_conn_queue);
+                curr_conn_close();
+                swap_to_main_ctx();
                 /* Should never get here*/
                 return -1;
             }
@@ -148,7 +142,7 @@ static ssize_t send_to_curr_conn(const char *buf, ssize_t to_send)
             n_send += count;
             to_send -= count;
 
-            curr_conn_update_active(&p_conn_queue);
+            curr_conn_update_active();
         } else {
             LOG(LOG_ERROR, "sent 0 bytes to client, end\n");
             send_ended = true;
@@ -264,7 +258,7 @@ std::shared_ptr<http_request_msg> recv_http_msg(void)
                         return std::shared_ptr<http_request_msg>();
                     }
                     req->append_body(recv_buf, count);
-                    curr_conn_update_active(&p_conn_queue);
+                    curr_conn_update_active();
                 }
             }
         }
@@ -293,12 +287,12 @@ bool handle_one_client_request(void)
     if (!req) {
         LOG(LOG_INFO1, "failed to recv request from client"
             " conn_sock = %d, conn = %p\n",
-            p_conn_queue.curr_conn->conn_sock, p_conn_queue.curr_conn);
+            curr_conn_sock(), curr_conn());
         return false;
     }
 
     LOG(LOG_INFO1, "got request from client conn_sock = %d, conn = %p\n",
-        p_conn_queue.curr_conn->conn_sock, p_conn_queue.curr_conn);
+        curr_conn_sock(), curr_conn());
     LOG(LOG_INFO1, "requset: method = %s, target = %s, version = %s\n",
         req->method.c_str(), req->target.c_str(), req->version.c_str());
     LOG(LOG_INFO2, "%s\n", req->serialize().c_str());
@@ -307,12 +301,12 @@ bool handle_one_client_request(void)
     if (send_http_msg(resp) <= 0) {
         LOG(LOG_ERROR, "failed to send response to client"
             " conn_sock = %d, conn = %p\n",
-            p_conn_queue.curr_conn->conn_sock, p_conn_queue.curr_conn);
+            curr_conn_sock(), curr_conn());
         return false;
     }
 
     LOG(LOG_INFO1, "sent request to client conn_sock = %d, conn = %p\n",
-        p_conn_queue.curr_conn->conn_sock, p_conn_queue.curr_conn);
+        curr_conn_sock(), curr_conn());
     LOG(LOG_INFO1, "response: code = %d, %s\n", resp->status_code,
         resp->status_text.c_str());
     LOG(LOG_INFO2, "%s\n", resp->serialize().c_str());
