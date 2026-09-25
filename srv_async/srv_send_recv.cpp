@@ -24,12 +24,12 @@ static bool is_http_message_end(char *recv_buf, ssize_t n_recv)
  * Find end of http header section (empty line "\r\n\r\n") in buf.
  * Returns offset just past "\r\n\r\n" or 0 if it is not found
  */
-static size_t find_http_headers_end(const char *buf, size_t len, size_t prev_len)
+static size_t find_http_headers_end(const char *buf, size_t len)
 {
     if (len < 4)
         return 0;
 
-    for (size_t i = prev_len; i <= len - 4; i++) {
+    for (size_t i = 0; i <= len - 4; i++) {
         if (buf[i] == '\r' && buf[i + 1] == '\n' &&
                 buf[i + 2] == '\r' && buf[i + 3] == '\n')
             return i + 4;
@@ -166,7 +166,7 @@ std::shared_ptr<http_request_msg> recv_http_msg(void)
 {
     char *recv_buf_p = curr_conn()->recv_buf_p;
     ssize_t recv_buf_size = curr_conn()->recv_buf_size;
-    ssize_t n_have = 0, hdr_end = 0, prev_n_have, count;
+    ssize_t n_have = 0, hdr_end = 0, count;
     std::shared_ptr<http_request_msg> req;
 
     /* Receive http headers of request into recv_buf */
@@ -177,10 +177,9 @@ std::shared_ptr<http_request_msg> recv_http_msg(void)
             /* Connection was closed by client due to error */
             return NULL;
         }
-        prev_n_have = n_have;
         n_have += count;
 
-        hdr_end = find_http_headers_end(recv_buf_p, n_have, prev_n_have);
+        hdr_end = find_http_headers_end(recv_buf_p, n_have);
         if (hdr_end)
             break;
 
