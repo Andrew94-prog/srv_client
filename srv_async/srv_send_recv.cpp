@@ -164,14 +164,15 @@ static ssize_t send_to_curr_conn(const char *buf, ssize_t to_send)
  */
 std::shared_ptr<http_request_msg> recv_http_msg(void)
 {
-    char recv_buf[RECV_BUF_SIZE];
+    char *recv_buf_p = curr_conn()->recv_buf_p;
+    ssize_t recv_buf_size = curr_conn()->recv_buf_size;
     ssize_t n_have = 0, hdr_end = 0, prev_n_have, count;
     std::shared_ptr<http_request_msg> req;
 
     /* Receive http headers of request into recv_buf */
     while (1) {
-        count = recv_from_curr_conn(recv_buf + n_have,
-                                    RECV_BUF_SIZE - n_have);
+        count = recv_from_curr_conn(recv_buf_p + n_have,
+                                    recv_buf_size - n_have);
         if (count <= 0) {
             /* Connection was closed by client due to error */
             return NULL;
@@ -179,12 +180,12 @@ std::shared_ptr<http_request_msg> recv_http_msg(void)
         prev_n_have = n_have;
         n_have += count;
 
-        hdr_end = find_http_headers_end(recv_buf, n_have, prev_n_have);
+        hdr_end = find_http_headers_end(recv_buf_p, n_have, prev_n_have);
         if (hdr_end)
             break;
 
         /* Restrict overall size of http headers by RECV_BUF_SIZE */
-        if (n_have == RECV_BUF_SIZE) {
+        if (n_have == recv_buf_size) {
             LOG(LOG_INFO1, "http headers of request are too large\n");
             req = std::make_shared<http_request_msg>();
             req->error_code = 431;
@@ -194,14 +195,14 @@ std::shared_ptr<http_request_msg> recv_http_msg(void)
 
     /* Get http method from headers and construct appropriate
      * http_request_<method>_msg object */
-    std::string method = get_method_token(recv_buf, n_have);
+    std::string method = get_method_token(recv_buf_p, n_have);
 
     req = http_request_msg::create(method);
     if (req) {
         /* Parse all http headers into request class object.
          * Only header section is passed, remaining bytes in
          * recv_buf belong to request body */
-        if (req->parse_request(recv_buf, hdr_end) ==
+        if (req->parse_request(recv_buf_p, hdr_end) ==
             http_msg::PARSE_ERROR)
             req->error_code = 400;
     } else {
@@ -243,21 +244,21 @@ std::shared_ptr<http_request_msg> recv_http_msg(void)
                  * together with headers */
                 if (left > body_len)
                     left = body_len;
-                req->append_body(recv_buf + hdr_end, left);
+                req->append_body(recv_buf_p + hdr_end, left);
 
                 /* Receive the remaining body of message in cycle */
                 while (req->get_body_size() < body_len) {
-                    size_t to_recv = body_len - req->get_body_size();
+                    ssize_t to_recv = body_len - req->get_body_size();
                     ssize_t count;
 
-                    if (to_recv > RECV_BUF_SIZE)
-                        to_recv = RECV_BUF_SIZE;
-                    count = recv_from_curr_conn(recv_buf, to_recv);
+                    if (to_recv > recv_buf_size)
+                        to_recv = recv_buf_size;
+                    count = recv_from_curr_conn(recv_buf_p, to_recv);
                     if (count <= 0) {
                         /* Connection was closed in the middle of body */
                         return std::shared_ptr<http_request_msg>();
                     }
-                    req->append_body(recv_buf, count);
+                    req->append_body(recv_buf_p, count);
                     curr_conn_update_active();
                 }
             }

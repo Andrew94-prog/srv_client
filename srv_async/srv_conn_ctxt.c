@@ -28,33 +28,43 @@ static unsigned long curr_time(void)
 
 static conn_t *alloc_conn_ctx_mem(void)
 {
-    char *conn_stack;
+    char *ctx_buf;
     conn_t *conn;
 
-    /* Create context with new stack for new connection  */
-    conn_stack = (char *) mmap(NULL, STACK_SIZE, PROT_READ | PROT_WRITE,
+    /* Memory for receive buffer, guard page, coroutine stack */
+    ctx_buf = (char *) mmap(NULL, CTX_BUF_SIZE, PROT_READ | PROT_WRITE,
                       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (conn_stack == MAP_FAILED) {
+    if (ctx_buf == MAP_FAILED) {
         LOG(LOG_ERROR, "failed to allocate stack for connection\n");
         return NULL;
     }
 
-    /* Enqueue new connection with context */
-    conn = (conn_t *) malloc(sizeof(conn_t));
-    if (!conn) {
-        LOG(LOG_ERROR, "allocation on ctx for connection failed\n");
+    if (mprotect(ctx_buf + RECV_BUF_SIZE, GUARD_SIZE, PROT_NONE)) {
+        LOG(LOG_ERROR, "failed to protect guard page for conn ctx\n");
+        munmap(ctx_buf, CTX_BUF_SIZE);
         return NULL;
     }
 
-    conn->orig_ss_sp = conn_stack;
-    conn->orig_ss_size = STACK_SIZE;
+    conn = (conn_t *) malloc(sizeof(conn_t));
+    if (!conn) {
+        LOG(LOG_ERROR, "allocation on ctx for connection failed\n");
+        munmap(ctx_buf, CTX_BUF_SIZE);
+        return NULL;
+    }
+
+    conn->ctx_buf_p = ctx_buf;
+    conn->ctx_buf_size = CTX_BUF_SIZE;
+    conn->recv_buf_p = ctx_buf;
+    conn->recv_buf_size = RECV_BUF_SIZE;
+    conn->ss_sp = ctx_buf + RECV_BUF_SIZE + GUARD_SIZE;
+    conn->ss_size = STACK_SIZE;
 
     return conn;
 }
 
 static void free_conn_ctx_mem(conn_t *conn)
 {
-    munmap(conn->orig_ss_sp, conn->orig_ss_size);
+    munmap(conn->ctx_buf_p, conn->ctx_buf_size);
     free(conn);
 }
 
@@ -106,8 +116,8 @@ static void free_conn_ctx(conn_t *conn)
 static void init_new_conn_ctx(conn_t *conn, int conn_sock)
 {
     getcontext(&conn->conn_ctx);
-    conn->conn_ctx.uc_stack.ss_sp = conn->orig_ss_sp;
-    conn->conn_ctx.uc_stack.ss_size = conn->orig_ss_size;
+    conn->conn_ctx.uc_stack.ss_sp = conn->ss_sp;
+    conn->conn_ctx.uc_stack.ss_size = conn->ss_size;
     conn->conn_ctx.uc_link = &p_conn_queue.main_ctx;
     makecontext(&conn->conn_ctx, handle_one_connection, 0);
 

@@ -1,13 +1,13 @@
 #ifndef SRV_DEFS_H
 #define SRV_DEFS_H
 
-/* Size of "fast" buffer for receiving of raw http message data.
- * It restricts maximum overall size of http headers */
-#define RECV_BUF_SIZE		(4096 + 4)
 /* Maximum size of http message body */
 #define MAX_HTTP_BODY_SIZE	(32UL * 1024 * 1024)
 
 #define STACK_SIZE		32768
+#define RECV_BUF_SIZE	8192
+#define GUARD_SIZE		4096
+#define CTX_BUF_SIZE	(STACK_SIZE + RECV_BUF_SIZE + GUARD_SIZE)
 #define MAX_ACTIVE_TIMEOUT	100000000
 #define MAX_INACTIVE_TIMEOUT	3000000000
 #define MAX_NUM_WORKERS		1000
