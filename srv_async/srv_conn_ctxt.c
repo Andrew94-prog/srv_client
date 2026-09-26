@@ -200,10 +200,10 @@ void curr_conn_update_active(void)
     p_conn_queue.curr_conn->last_active = curr_time();
 }
 
-bool curr_conn_timeout(unsigned long timeout)
+bool curr_conn_active_timeout(void)
 {
-    return (curr_time() - p_conn_queue.curr_conn->last_active > timeout) ?
-            true : false;
+    return (curr_time() - p_conn_queue.curr_conn->last_active >
+            MAX_ACTIVE_TIMEOUT) ? true : false;
 }
 
 void free_closed_conn(conn_t *conn)

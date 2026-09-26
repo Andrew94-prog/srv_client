@@ -58,7 +58,7 @@ static ssize_t recv_from_curr_conn(char *buf, ssize_t to_recv)
         count = read(curr_conn_sock(), buf, to_recv);
         if (count < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                if (curr_conn_timeout(MAX_ACTIVE_TIMEOUT)) {
+                if (curr_conn_active_timeout()) {
                     LOG(LOG_INFO2, "recv async, set inactivate "
                             "conn_sock = %d, curr_conn = %p\n",
                             curr_conn_sock(), curr_conn());
@@ -104,7 +104,7 @@ static ssize_t send_to_curr_conn(const char *buf, ssize_t to_send)
         count = write(curr_conn_sock(), buf, to_send);
         if (count < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                if (curr_conn_timeout(MAX_ACTIVE_TIMEOUT)) {
+                if (curr_conn_active_timeout()) {
                     LOG(LOG_INFO2, "send async, set inactive "
                             "conn_sock = %d, curr_conn = %p\n",
                             curr_conn_sock(), curr_conn());
