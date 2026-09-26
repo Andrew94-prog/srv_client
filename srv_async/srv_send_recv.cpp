@@ -52,7 +52,6 @@ static ssize_t recv_from_curr_conn(char *buf, ssize_t to_recv)
 {
     ssize_t n_recv = 0, count;
     bool recv_ended = false;
-    int ret;
 
     curr_conn_update_active();
     while (to_recv && !recv_ended) {
@@ -70,14 +69,8 @@ static ssize_t recv_from_curr_conn(char *buf, ssize_t to_recv)
                     " conn_sock = %d, curr_conn = %p\n",
                     curr_conn_sock(), curr_conn());
 
-                ret = swap_to_main_ctx();
-                if (ret == 0) {
-                    continue;
-                } else {
-                    LOG(LOG_ERROR, "switch ctx from client recv to"
-                           " main_ctx failed with unknown error");
-                    exit(EXIT_FAILURE);
-                }
+                swap_to_main_ctx();
+                continue;
             } else {
                 LOG(LOG_ERROR, "recv from client failed, close connection"
                        " and switch back to main_ctx");
@@ -105,7 +98,6 @@ static ssize_t send_to_curr_conn(const char *buf, ssize_t to_send)
 {
     ssize_t n_send = 0, count;
     bool send_ended = false;
-    int ret;
 
     while (to_send && !send_ended) {
         count = write(curr_conn_sock(), buf, to_send);
@@ -122,14 +114,8 @@ static ssize_t send_to_curr_conn(const char *buf, ssize_t to_send)
                     " conn_sock = %d, curr_conn = %p\n",
                     curr_conn_sock(), curr_conn());
 
-                ret = swap_to_main_ctx();
-                if (ret == 0) {
-                    continue;
-                } else {
-                    LOG(LOG_ERROR, "switch ctx from client send to"
-                           " main_ctx failed with unknown error");
-                    exit(EXIT_FAILURE);
-                }
+                swap_to_main_ctx();
+                continue;
             } else {
                 LOG(LOG_ERROR, "write to client failed, close connection"
                        " and switch back to main_ctx");

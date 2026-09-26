@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <ucontext.h>
 #include <string.h>
 #include <unistd.h>
@@ -212,15 +213,28 @@ void free_closed_conn(conn_t *conn)
 
 int swap_to_main_ctx(void)
 {
-    return swapcontext(&p_conn_queue.curr_conn->conn_ctx,
-                        &p_conn_queue.main_ctx);
+    conn_t *conn = p_conn_queue.curr_conn;
+
+    if (swapcontext(&conn->conn_ctx, &p_conn_queue.main_ctx)) {
+        LOG(LOG_ERROR, "switch to main_ctx failed with unknown error"
+            " from: conn_sock = %d, conn = %p\n", conn->conn_sock, conn);
+        exit(EXIT_FAILURE);
+    }
+
+    return 0;
 }
 
 int swap_to_conn_ctx(conn_t *conn)
 {
     p_conn_queue.curr_conn = conn;
 
-    return swapcontext(&p_conn_queue.main_ctx, &conn->conn_ctx);
+    if (swapcontext(&p_conn_queue.main_ctx, &conn->conn_ctx)) {
+        LOG(LOG_ERROR, "switch to conn_ctx failed with unknown error"
+            " conn_sock = %d, conn = %p\n", conn->conn_sock, conn);
+        exit(EXIT_FAILURE);
+    }
+
+    return 0;
 }
 
 int create_new_conn(int conn_sock)

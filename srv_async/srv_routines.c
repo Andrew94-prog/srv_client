@@ -158,12 +158,9 @@ void handle_connections_routine(int srv_sock)
 
         /* Handle all connections in conn queue */
         qlist_foreach_entry_safe(&conn_queue()->qconn_list, conn, conn_n, qlist) {
-            if ((ret = swap_to_conn_ctx(conn))) {
-                LOG(LOG_ERROR, "failed to switch to conn ctx\n");
-                exit(EXIT_FAILURE);
-            }
+            swap_to_conn_ctx(conn);
 
-            if (conn->is_completed || ret) {
+            if (conn->is_completed) {
                 remove_conn_from_queue(conn);
                 free_closed_conn(conn);
             }
