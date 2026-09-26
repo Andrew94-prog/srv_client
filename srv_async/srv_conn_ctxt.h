@@ -61,7 +61,6 @@ void init_conn_queue(void);
 void init_conn_ctx_cache(void);
 
 void curr_conn_close(void);
-void curr_conn_set_active(void);
 void curr_conn_set_inactive(void);
 bool curr_conn_active_timeout();
 void curr_conn_update_active(void);

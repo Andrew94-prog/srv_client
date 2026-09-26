@@ -176,16 +176,6 @@ void curr_conn_close(void)
     }
 }
 
-void curr_conn_set_active(void)
-{
-    if (!p_conn_queue.curr_conn->is_active) {
-        p_conn_queue.curr_conn->is_active = true;
-        p_conn_queue.curr_conn->last_active = curr_time();
-        p_conn_queue.active_conn_cnt++;
-        p_conn_queue.inactive_conn_cnt--;
-    }
-}
-
 void curr_conn_set_inactive(void)
 {
     if (p_conn_queue.curr_conn->is_active) {
@@ -198,6 +188,12 @@ void curr_conn_set_inactive(void)
 void curr_conn_update_active(void)
 {
     p_conn_queue.curr_conn->last_active = curr_time();
+
+    if (!p_conn_queue.curr_conn->is_active) {
+        p_conn_queue.curr_conn->is_active = false;
+        p_conn_queue.active_conn_cnt++;
+        p_conn_queue.inactive_conn_cnt--;
+    }
 }
 
 bool curr_conn_active_timeout(void)
