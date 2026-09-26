@@ -99,6 +99,7 @@ static ssize_t send_to_curr_conn(const char *buf, ssize_t to_send)
     ssize_t n_send = 0, count;
     bool send_ended = false;
 
+    curr_conn_update_active();
     while (to_send && !send_ended) {
         count = write(curr_conn_sock(), buf, to_send);
         if (count < 0) {
