@@ -17,7 +17,7 @@
 static conn_queue_t p_conn_queue;
 static conn_ctx_cache_t p_conn_ctx_cache;
 
-static unsigned long curr_time(void)
+static time_t curr_time(void)
 {
     struct timespec ts;
 
@@ -196,10 +196,21 @@ void curr_conn_update_active(void)
     }
 }
 
+void curr_conn_start_op(void)
+{
+    p_conn_queue.curr_conn->start_op = curr_time();
+}
+
 bool curr_conn_active_timeout(void)
 {
     return (curr_time() - p_conn_queue.curr_conn->last_active >
             MAX_ACTIVE_TIMEOUT) ? true : false;
+}
+
+bool curr_conn_op_timeout(time_t timeout)
+{
+    return (curr_time() - p_conn_queue.curr_conn->start_op >
+            timeout) ? true : false;
 }
 
 void free_closed_conn(conn_t *conn)

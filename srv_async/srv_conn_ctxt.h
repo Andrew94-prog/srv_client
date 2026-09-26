@@ -35,6 +35,7 @@ typedef struct Conn {
     bool is_completed;
     bool is_active;
     unsigned long last_active;
+    time_t start_op;
 
     struct qlist_head qlist;
 } conn_t;
@@ -63,7 +64,9 @@ void init_conn_ctx_cache(void);
 void curr_conn_close(void);
 void curr_conn_set_inactive(void);
 bool curr_conn_active_timeout();
+bool curr_conn_op_timeout(time_t timeout);
 void curr_conn_update_active(void);
+void curr_conn_start_op(void);
 int swap_to_main_ctx(void);
 int swap_to_conn_ctx(conn_t *conn);
 void free_closed_conn(conn_t *conn);

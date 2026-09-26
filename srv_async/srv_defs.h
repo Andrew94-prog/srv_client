@@ -17,6 +17,9 @@
 #define MIN_CONN_CTX_CACHE_CNT	50
 #define MAX_CONN_CTX_CACHE_CNT	300
 
+#define TIMEOUT_INF ((time_t) -1)
+#define CLIENT_OP_TIMEOUT 5000000000
+
 enum {
 	LOG_ERROR = 0,
 	LOG_INFO1 = 1,

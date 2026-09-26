@@ -12,12 +12,41 @@
 #include "srv_defs.h"
 #include "http_msg.h"
 
-static bool is_http_message_end(char *recv_buf, ssize_t n_recv)
+/*
+ * Check if at least one termination sequence "\r\n\r\n" conained
+ * in http message.
+ */
+static bool is_http_message_end(char *recv_buf, ssize_t prev_n_recv,
+                                ssize_t n_recv)
 {
-    return n_recv >= 4 && recv_buf[n_recv - 1] == '\n' &&
-           recv_buf[n_recv - 2] == '\r' &&
-           recv_buf[n_recv - 3] == '\n' &&
-           recv_buf[n_recv - 4] == '\r';
+    char term_seq[] = "\r\n\r\n";
+    int i;
+
+    /* Check if message has enough length */
+    if (n_recv < 4)
+        return false;
+
+    /*
+     * Check if message ends with termination sequence. It is very often
+     * case when http headers received without body (GET, HEAD methods)
+     */
+    if (!strncmp(recv_buf + n_recv - 4, term_seq, 4))
+        return true;
+
+    /* Termination sequence on the boundary of current and previous chunk */
+    for (i = 3; i >= 1; i--) {
+        if (prev_n_recv >= i && !strncmp(recv_buf + prev_n_recv - i,
+                term_seq, 4))
+            return true;
+    }
+
+    /* Common case: search for termination sequence in current chunk */
+    for (i = prev_n_recv; i <= n_recv - 4; i++) {
+        if (!strncmp(recv_buf + i, term_seq, 4))
+            return true;
+    }
+
+    return false;
 }
 
 /*
@@ -48,13 +77,15 @@ static std::string get_method_token(const char *buf, size_t len)
     return std::string(buf, sp - buf);
 }
 
-static ssize_t recv_from_curr_conn(char *buf, ssize_t to_recv)
+static ssize_t recv_from_curr_conn(char *buf, ssize_t to_recv,
+                                time_t timeout, bool terminator)
 {
-    ssize_t n_recv = 0, count;
-    bool recv_ended = false;
+    ssize_t n_recv = 0, prev_n_recv = 0, count;
+    bool recv_term = false, recv_timeout = false;
 
     curr_conn_update_active();
-    while (to_recv && !recv_ended) {
+    curr_conn_start_op();
+    while (to_recv && !recv_term && !recv_timeout) {
         count = read(curr_conn_sock(), buf, to_recv);
         if (count < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -84,23 +115,32 @@ static ssize_t recv_from_curr_conn(char *buf, ssize_t to_recv)
             to_recv -= count;
 
             curr_conn_update_active();
-            recv_ended = is_http_message_end(buf, n_recv);
+
+            if (terminator)
+                recv_term = is_http_message_end(buf, prev_n_recv, n_recv);
+
+            if (timeout != TIMEOUT_INF)
+                recv_timeout = curr_conn_op_timeout(timeout);
+
+            prev_n_recv = n_recv;
         } else {
             LOG(LOG_ERROR, "recv 0 bytes from client, end\n");
-            recv_ended = true;
+            recv_term = true;
         }
     }
 
     return n_recv;
 }
 
-static ssize_t send_to_curr_conn(const char *buf, ssize_t to_send)
+static ssize_t send_to_curr_conn(const char *buf, ssize_t to_send,
+                                time_t timeout)
 {
     ssize_t n_send = 0, count;
-    bool send_ended = false;
+    bool send_ended = false, send_timeout = false;
 
     curr_conn_update_active();
-    while (to_send && !send_ended) {
+    curr_conn_start_op();
+    while (to_send && !send_ended && !send_timeout) {
         count = write(curr_conn_sock(), buf, to_send);
         if (count < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -130,6 +170,9 @@ static ssize_t send_to_curr_conn(const char *buf, ssize_t to_send)
             to_send -= count;
 
             curr_conn_update_active();
+
+            if (timeout != TIMEOUT_INF)
+                send_timeout = curr_conn_op_timeout(timeout);
         } else {
             LOG(LOG_ERROR, "sent 0 bytes to client, end\n");
             send_ended = true;
@@ -159,7 +202,8 @@ std::shared_ptr<http_request_msg> recv_http_msg(void)
     /* Receive http headers of request into recv_buf */
     while (1) {
         count = recv_from_curr_conn(recv_buf_p + n_have,
-                                    recv_buf_size - n_have);
+                                    recv_buf_size - n_have,
+                                    TIMEOUT_INF, true);
         if (count <= 0) {
             /* Connection was closed by client due to error */
             return NULL;
@@ -239,13 +283,13 @@ std::shared_ptr<http_request_msg> recv_http_msg(void)
 
                     if (to_recv > recv_buf_size)
                         to_recv = recv_buf_size;
-                    count = recv_from_curr_conn(recv_buf_p, to_recv);
+                    count = recv_from_curr_conn(recv_buf_p, to_recv,
+                                                CLIENT_OP_TIMEOUT, false);
                     if (count <= 0) {
                         /* Connection was closed in the middle of body */
                         return std::shared_ptr<http_request_msg>();
                     }
                     req->append_body(recv_buf_p, count);
-                    curr_conn_update_active();
                 }
             }
         }
@@ -264,7 +308,7 @@ ssize_t send_http_msg(std::shared_ptr<http_response_msg> resp)
     const char *data = msg.c_str();
     ssize_t to_send = (ssize_t) msg.size();
 
-    return send_to_curr_conn(data, to_send);
+    return send_to_curr_conn(data, to_send, CLIENT_OP_TIMEOUT);
 }
 
 bool handle_one_client_request(void)
