@@ -2,7 +2,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "http_msg.h"
+#include "srv_http_msg.h"
 
 void http_msg::add_header(const std::string &name,
                           const std::string &value)

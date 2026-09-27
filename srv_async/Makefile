@@ -1,5 +1,5 @@
-COBJS := srv_async.o srv_conn_ctxt.o srv_sock.o srv_config.o srv_routines.o
-CPPOBJS := srv_send_recv.o http_msg.o
+COBJS := srv_async.o srv_conn_ctxt.o srv_sock.o srv_config.o srv_routines.o srv_conn_send_recv.o
+CPPOBJS := srv_http_send_recv.o srv_http_msg.o
 
 DEPS := $(COBJS:.o=.o.d) $(CPPOBJS:.o=.o.d)
 
