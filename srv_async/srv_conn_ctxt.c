@@ -190,7 +190,7 @@ void curr_conn_update_active(void)
     p_conn_queue.curr_conn->last_active = curr_time();
 
     if (!p_conn_queue.curr_conn->is_active) {
-        p_conn_queue.curr_conn->is_active = false;
+        p_conn_queue.curr_conn->is_active = true;
         p_conn_queue.active_conn_cnt++;
         p_conn_queue.inactive_conn_cnt--;
     }
