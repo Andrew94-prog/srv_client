@@ -2,52 +2,84 @@
 #define HTTP_MSG_H
 
 #include <string>
-#include <list>
+#include <string_view>
 #include <unordered_map>
 #include <sstream>
 #include <memory>
 #include <utility>
+#include <variant>
+#include <vector>
+#include <functional>
 
 class http_response_msg;
 
+/* All http response status codes used by server.
+ * Value of each enumerator is a valid http status code,
+ * which is used as index in http_status_text */
+enum http_status {
+    HTTP_STATUS_NONE = 0,               /* no error, request is valid */
+    HTTP_STATUS_OK = 200,
+    HTTP_STATUS_BAD_REQUEST = 400,
+    HTTP_STATUS_NOT_FOUND = 404,
+    HTTP_STATUS_METHOD_NOT_ALLOWED = 405,
+    HTTP_STATUS_REQUEST_TIMEOUT = 408,
+    HTTP_STATUS_LENGTH_REQUIRED = 411,
+    HTTP_STATUS_PAYLOAD_TOO_LARGE = 413,
+    HTTP_STATUS_INTERNAL_SERVER_ERROR = 500,
+    HTTP_STATUS_NOT_IMPLEMENTED = 501,
+    HTTP_STATUS_HEADER_FIELDS_TOO_LARGE = 431,
+};
+
+/* Text description for each status code from http_status enum.
+ * http_status_text[code] is "" for codes not used by server */
+extern const std::vector<std::string> http_status_text;
+
 /*
  * Generic http message: header fields + optional body.
- * Header fields are stored in list (fast sequential iteration)
- * and iterators to them in unordered_map (fast access by name)
+ * Each header field is stored in unordered_map with header name
+ * as key (lowercased, names are case-insensitive) and variant of
+ * all possible supported value types as value
  */
 class http_msg {
 public:
-    typedef std::pair<std::string, std::string> header_field_t;
-    typedef std::list<header_field_t> header_list_t;
-    typedef header_list_t::iterator header_iter_t;
+    /* All possible types of header field value */
+    using header_value_t = std::variant<std::string, size_t>;
 
-    enum parse_result {
-        PARSE_OK = 0,
-        PARSE_INCOMPLETE,   /* need more bytes to complete message */
-        PARSE_ERROR,        /* malformed message */
-    };
+    http_msg() = default;
+    virtual ~http_msg() = default;
 
-    http_msg() {}
-    virtual ~http_msg() {}
+    void AddHeader(std::string_view name, std::string_view value);
+    void AddHeader(std::string_view name, size_t value);
 
-    void add_header(const std::string &name, const std::string &value);
-    /* Returns NULL if there is no header with such name */
-    const std::string *find_header(const std::string &name) const;
+    /* Check if message has header field with such name */
+    bool HasHeader(std::string_view name) const;
 
-    void set_body(const std::string &b) { body = b; }
-    void append_body(const char *buf, size_t len) { body.append(buf, len); }
-    const std::string &get_body() const { return body; }
-    size_t get_body_size() const { return body.size(); }
+    /* Returns value of header field. If there is no header with
+     * such name, returns empty value; use HasHeader() to check
+     * for existence beforehand */
+    header_value_t GetHeaderValue(std::string_view name) const;
+
+    /* Transform value of header field to appropriate type.
+     * Transformation always succeeds, because valid checks are
+     * done when header fields are added */
+    static std::string AsString(const header_value_t &value)
+        { return std::get<std::string>(value); }
+    static size_t AsSizeT(const header_value_t &value)
+        { return std::get<size_t>(value); }
+
+    void SetBody(const std::string &b) { body = b; }
+    void AppendBody(std::string_view chunk) { body.append(chunk); }
+    const std::string &GetBody() const { return body; }
+    size_t GetBodySize() const { return body.size(); }
 
     /* Transform whole http message into string */
-    virtual std::string serialize() const = 0;
+    virtual std::string Serialize() const = 0;
 
 protected:
     /* Append all header fields and body to output stream */
-    void serialize_headers_and_body(std::ostringstream &out) const;
+    void SerializeHeadersAndBody(std::ostringstream &out) const;
 
-    header_list_t headers;
-    std::unordered_map<std::string, header_iter_t> headers_map;
+    std::unordered_map<std::string, header_value_t> headers;
     std::string body;
 };
 
@@ -57,35 +89,76 @@ protected:
  */
 class http_request_msg : public http_msg {
 public:
-    std::string method;
     std::string target;
     std::string version;   /* e.g. "HTTP/1.1" */
 
-    int error_code;        /* response error code for this request,
-                              0 if request is valid */
-    bool parse_error;      /* request was received, but malformed */
+    bool parse_error = false;  /* request was received, but malformed */
 
-    http_request_msg() : error_code(0), parse_error(false) {}
+    http_request_msg() = default;
+
+    /* Create empty request with error code, for requests which
+     * could not be received or parsed and no other fields matter */
+    explicit http_request_msg(http_status error) :
+        error_code(error) {}
+
+    /* Create request with given error code and method, e.g. for
+     * requests with unsupported method */
+    http_request_msg(http_status error, std::string_view method) :
+        method(method), error_code(error) {}
+
+    const std::string &GetMethod() const { return method; }
+
+    void SetErrorCode(http_status code) { error_code = code; }
+    http_status GetErrorCode() const { return error_code; }
+
+    /* Request is error if it was malformed or received with error */
+    bool IsError() const { return parse_error || error_code != HTTP_STATUS_NONE; }
+    bool IsOk() const { return !IsError(); }
 
     /* Parse request line and header fields of message
-     * (body is not parsed, buf must contain whole header section) */
-    parse_result parse_request(const char *buf, size_t len);
+     * (body is not parsed, buf must contain whole header section).
+     * On malformed message sets error_code to HTTP_STATUS_BAD_REQUEST */
+    void ParseRequestHeader(std::string_view buf);
 
     /* Keep-alive logic: HTTP/1.1 is persistent by default,
      * HTTP/1.0 is not, "Connection" header overrides default */
-    bool want_keep_alive() const;
+    bool WantKeepAlive() const;
 
     /* Form response message for this request */
-    virtual std::shared_ptr<http_response_msg> make_response();
+    virtual std::shared_ptr<http_response_msg> MakeResponse();
 
-    virtual std::string serialize() const;
+    virtual std::string Serialize() const;
 
-    /* Factory: create http_request_<method>_msg object
-     * for supported method. Returns NULL for unsupported method */
-    static std::shared_ptr<http_request_msg> create(const std::string &method);
+    /* Description of each supported http method: factory for
+     * creation of http_request_<method>_msg object and flag
+     * if method can have body in request */
+    struct method_info_t {
+        std::function<std::shared_ptr<http_request_msg>()> creator;
+        bool has_body;
+    };
+
+    static const std::unordered_map<std::string, method_info_t>
+            methods_info;
+
+    /* Factory: create http_request_<method>_msg object for supported
+     * method or request with HTTP_STATUS_METHOD_NOT_ALLOWED error
+     * for unsupported method */
+    static std::shared_ptr<http_request_msg> Create(std::string_view method);
 
     /* Methods which can have body in request */
-    static bool method_has_body(const std::string &method);
+    static bool MethodHasBody(std::string_view method);
+
+private:
+    std::string method;   /* http method of request */
+
+    http_status error_code = HTTP_STATUS_NONE;  /* response error code
+                                                    for this request,
+                                                    HTTP_STATUS_NONE if
+                                                    request is valid */
+
+protected:
+    /* Hook for derived classes: form response for valid request */
+    virtual std::shared_ptr<http_response_msg> MakeOkResponse();
 };
 
 /* -------------------------------------------------------------- */
@@ -93,32 +166,32 @@ public:
 
 class http_request_get_msg : public http_request_msg {
 public:
-    virtual std::shared_ptr<http_response_msg> make_response();
+    std::shared_ptr<http_response_msg> MakeOkResponse() override;
 };
 
 class http_request_head_msg : public http_request_msg {
 public:
-    virtual std::shared_ptr<http_response_msg> make_response();
+    std::shared_ptr<http_response_msg> MakeOkResponse() override;
 };
 
 class http_request_post_msg : public http_request_msg {
 public:
-    virtual std::shared_ptr<http_response_msg> make_response();
+    std::shared_ptr<http_response_msg> MakeOkResponse() override;
 };
 
 class http_request_put_msg : public http_request_msg {
 public:
-    virtual std::shared_ptr<http_response_msg> make_response();
+    std::shared_ptr<http_response_msg> MakeOkResponse() override;
 };
 
 class http_request_delete_msg : public http_request_msg {
 public:
-    virtual std::shared_ptr<http_response_msg> make_response();
+    std::shared_ptr<http_response_msg> MakeOkResponse() override;
 };
 
 class http_request_patch_msg : public http_request_msg {
 public:
-    virtual std::shared_ptr<http_response_msg> make_response();
+    std::shared_ptr<http_response_msg> MakeOkResponse() override;
 };
 
 /* -------------------------------------------------------------- */
@@ -126,14 +199,14 @@ public:
 /* The only type for http response to client at least now */
 class http_response_msg : public http_msg {
 public:
-    int status_code;
-    std::string status_text;
+    http_status status_code = HTTP_STATUS_OK;
+    std::string status_text = "OK";
 
-    http_response_msg() : status_code(200), status_text("OK") {}
-    http_response_msg(int code, const std::string &text) :
-        status_code(code), status_text(text) {}
+    http_response_msg() = default;
+    http_response_msg(http_status code) :
+        status_code(code), status_text(http_status_text[static_cast<size_t>(code)]) {}
 
-    virtual std::string serialize() const;
+    std::string Serialize() const override;
 };
 
 #endif /* HTTP_MSG_H */

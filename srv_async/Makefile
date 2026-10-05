@@ -4,6 +4,7 @@ CPPOBJS := srv_http_send_recv.o srv_http_msg.o
 DEPS := $(COBJS:.o=.o.d) $(CPPOBJS:.o=.o.d)
 
 CFLAGS=-Wall
+CPPFLAGS=-Wall -std=c++20
 
 %.o: %.c
 	$(CXX) $(CFLAGS) -O2 -c $<
@@ -11,8 +12,8 @@ CFLAGS=-Wall
 	mv $@.d.tmp $@.d
 
 %.o: %.cpp
-	$(CXX) $(CFLAGS) -O2 -c $<
-	$(CXX) $(CFLAGS) -MM -MG -MT $@ $< -o $@.d.tmp
+	$(CXX) $(CPPFLAGS) -O2 -c $<
+	$(CXX) $(CPPFLAGS) -MM -MG -MT $@ $< -o $@.d.tmp
 	mv $@.d.tmp $@.d
 
 srv_async: $(COBJS) $(CPPOBJS)
