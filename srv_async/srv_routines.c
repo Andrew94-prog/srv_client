@@ -11,7 +11,7 @@
 #include "srv_defs.h"
 #include "srv_conn_ctxt.h"
 #include "srv_sock.h"
-#include "srv_http_send_recv.h"
+#include "http/srv_http_send_recv.h"
 #include "srv_qlist.h"
 #include "srv_config.h"
 

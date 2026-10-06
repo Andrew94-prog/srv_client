@@ -11,7 +11,11 @@
 - `srv_conn_ctxt.c` — coroutine context management, includes creating
   and deleting coroutines with context for each connection, scheduling of coroutines
 - `srv_conn_send_recv.c` — functions for receiving/sending raw data from/to socket
-- `srv_http_send_recv.cpp`, `srv_http_msg.cpp` — handling of http messages from clients
+- `http/srv_http_send_recv.cpp`, `http/srv_http_msg.cpp` — receiving and sending of http
+  messages from/to clients, base class of http messages
+- `http/srv_http_request_msg.cpp`, `http/srv_http_response_msg.cpp` — common classes
+  of http requests and responses
+- `http/srv_http_request_<type>.cpp` — classes of http requests for each supported method
 
 ### 3. General rules
 
