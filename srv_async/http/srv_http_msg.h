@@ -89,9 +89,6 @@ protected:
  */
 class http_request_msg : public http_msg {
 public:
-    std::string target;
-    std::string version;   /* e.g. "HTTP/1.1" */
-
     bool parse_error = false;  /* request was received, but malformed */
 
     http_request_msg() = default;
@@ -107,6 +104,8 @@ public:
         method(method), error_code(error) {}
 
     const std::string &GetMethod() const { return method; }
+    const std::string &GetTarget() const { return target; }
+    const std::string &GetVersion() const { return version; }
 
     void SetErrorCode(http_status code) { error_code = code; }
     http_status GetErrorCode() const { return error_code; }
@@ -148,9 +147,12 @@ public:
     /* Methods which can have body in request */
     static bool MethodHasBody(std::string_view method);
 
-private:
+protected:
     std::string method;   /* http method of request */
+    std::string target;   /* request target, e.g. "/index.html" */
+    std::string version;  /* http version, e.g. "HTTP/1.1" */
 
+private:
     http_status error_code = HTTP_STATUS_NONE;  /* response error code
                                                     for this request,
                                                     HTTP_STATUS_NONE if

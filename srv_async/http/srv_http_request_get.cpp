@@ -11,7 +11,7 @@ namespace srv_http {
 response_ptr_t make_main_page_response(const http_request_msg &req,
                                        bool omit_body)
 {
-    if (req.target == "/" || req.target == "/index.html") {
+    if (req.GetTarget() == "/" || req.GetTarget() == "/index.html") {
         return make_page_response(HTTP_STATUS_OK, req, "Main Page",
                 "<h1>Welcome to coroutine-based async server!</h1>\n"
                 "<p>This is the server's main page plug.</p>\n",
@@ -20,7 +20,7 @@ response_ptr_t make_main_page_response(const http_request_msg &req,
 
     return make_page_response(HTTP_STATUS_NOT_FOUND, req, "Not Found",
             "<h1>404 Page Not Found</h1>\n"
-            "<p>Requested page: " + req.target + "</p>\n",
+            "<p>Requested page: " + req.GetTarget() + "</p>\n",
             omit_body);
 }
 

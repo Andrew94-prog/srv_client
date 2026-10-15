@@ -170,7 +170,8 @@ bool handle_one_client_request()
     LOG(LOG_INFO1, "got request from client conn_sock = %d, conn = %p\n",
         curr_conn_sock(), curr_conn());
     LOG(LOG_INFO1, "requset: method = %s, target = %s, version = %s\n",
-        req->GetMethod().c_str(), req->target.c_str(), req->version.c_str());
+        req->GetMethod().c_str(), req->GetTarget().c_str(),
+        req->GetVersion().c_str());
     LOG(LOG_INFO2, "%s\n", req->Serialize().c_str());
 
     std::shared_ptr<http_response_msg> resp = req->MakeResponse();
