@@ -151,9 +151,19 @@ std::shared_ptr<http_request_msg> recv_http_msg()
 ssize_t send_http_msg(const std::shared_ptr<http_response_msg> &resp)
 {
     const std::string msg = resp->Serialize();
+    ssize_t curr = 0, size = msg.size();
 
-    return send_to_curr_conn(msg.data(), static_cast<ssize_t>(msg.size()),
-                             CLIENT_OP_TIMEOUT);
+    while (curr < size) {
+        ssize_t to_send = std::min(SEND_PACKET_SIZE, size - curr);
+        ssize_t count = send_to_curr_conn(msg.data() + curr, to_send,
+                                        CLIENT_OP_TIMEOUT);
+        if (count != to_send)
+            return 0;
+
+        curr += to_send;
+    }
+
+    return size;
 }
 
 bool handle_one_client_request()
