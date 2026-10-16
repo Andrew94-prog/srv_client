@@ -57,7 +57,7 @@ ssize_t recv_from_curr_conn(char *buf, ssize_t to_recv,
     curr_conn_update_active();
     curr_conn_start_op();
     while (to_recv && !recv_term && !recv_timeout) {
-        count = read(curr_conn_sock(), buf, to_recv);
+        count = read(curr_conn_sock(), buf + n_recv, to_recv);
         if (count < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 if (curr_conn_active_timeout()) {
@@ -112,7 +112,7 @@ ssize_t send_to_curr_conn(const char *buf, ssize_t to_send,
     curr_conn_update_active();
     curr_conn_start_op();
     while (to_send && !send_ended && !send_timeout) {
-        count = write(curr_conn_sock(), buf, to_send);
+        count = write(curr_conn_sock(), buf + n_send, to_send);
         if (count < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 if (curr_conn_active_timeout()) {
