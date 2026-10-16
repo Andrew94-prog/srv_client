@@ -48,10 +48,10 @@ static bool is_http_message_end(char *recv_buf, ssize_t prev_n_recv,
     return false;
 }
 
-ssize_t recv_from_curr_conn(char *buf, ssize_t to_recv,
+ssize_t recv_from_curr_conn(char *buf, ssize_t to_recv, ssize_t n_recv,
                             time_t timeout, bool terminator)
 {
-    ssize_t n_recv = 0, prev_n_recv = 0, count;
+    ssize_t count;
     bool recv_term = false, recv_timeout = false;
 
     curr_conn_update_active();
@@ -82,18 +82,16 @@ ssize_t recv_from_curr_conn(char *buf, ssize_t to_recv,
                 return -1;
             }
         } else if (count > 0) {
-            n_recv += count;
-            to_recv -= count;
-
             curr_conn_update_active();
 
             if (terminator)
-                recv_term = is_http_message_end(buf, prev_n_recv, n_recv);
+                recv_term = is_http_message_end(buf, n_recv, n_recv + count);
 
             if (timeout != TIMEOUT_INF)
                 recv_timeout = curr_conn_op_timeout(timeout);
 
-            prev_n_recv = n_recv;
+            n_recv += count;
+            to_recv -= count;
         } else {
             LOG(LOG_ERROR, "recv 0 bytes from client, end\n");
             recv_term = true;

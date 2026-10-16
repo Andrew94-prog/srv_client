@@ -58,7 +58,7 @@ std::shared_ptr<http_request_msg> recv_http_msg()
     while (true) {
         ssize_t count = recv_from_curr_conn(recv_buf_p + n_have,
                                             recv_buf_size - n_have,
-                                            TIMEOUT_INF, true);
+                                            0, TIMEOUT_INF, true);
         if (count <= 0) {
             /* Connection was closed by client due to error */
             return nullptr;
@@ -128,7 +128,7 @@ std::shared_ptr<http_request_msg> recv_http_msg()
                     size_t to_recv = std::min(body_len - req->GetBodySize(),
                                               recv_buf_size);
                     ssize_t count = recv_from_curr_conn(recv_buf_p, to_recv,
-                                                        CLIENT_OP_TIMEOUT,
+                                                        0, CLIENT_OP_TIMEOUT,
                                                         false);
 
                     if (count <= 0) {
