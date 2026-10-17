@@ -72,9 +72,9 @@ bool curr_conn_op_timeout(time_t timeout);
 bool need_ctx_swap(void);
 void curr_conn_update_active(void);
 void curr_conn_start_op(void);
-int swap_to_main_ctx(void);
+void swap_to_main_ctx(void);
 void cond_swap_to_main_ctx(void);
-int swap_to_conn_ctx(conn_t *conn);
+void swap_to_conn_ctx(conn_t *conn);
 void free_closed_conn(conn_t *conn);
 int create_new_conn(int conn_sock);
 

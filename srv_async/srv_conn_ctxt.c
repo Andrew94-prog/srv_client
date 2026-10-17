@@ -226,7 +226,7 @@ void free_closed_conn(conn_t *conn)
     free_conn_ctx(conn);
 }
 
-int swap_to_main_ctx(void)
+void swap_to_main_ctx(void)
 {
     conn_t *conn = p_conn_queue.curr_conn;
 
@@ -237,8 +237,6 @@ int swap_to_main_ctx(void)
     }
 
     p_conn_queue.last_ctx_swap = curr_time();
-
-    return 0;
 }
 
 void cond_swap_to_main_ctx(void)
@@ -247,7 +245,7 @@ void cond_swap_to_main_ctx(void)
         swap_to_main_ctx();
 }
 
-int swap_to_conn_ctx(conn_t *conn)
+void swap_to_conn_ctx(conn_t *conn)
 {
     p_conn_queue.curr_conn = conn;
 
@@ -258,8 +256,6 @@ int swap_to_conn_ctx(conn_t *conn)
     }
 
     p_conn_queue.last_ctx_swap = curr_time();
-
-    return 0;
 }
 
 int create_new_conn(int conn_sock)
