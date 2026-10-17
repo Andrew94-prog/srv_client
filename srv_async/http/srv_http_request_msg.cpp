@@ -15,7 +15,6 @@
 void http_request_msg::ParseRequestHeader(std::string_view buf)
 {
     auto fail = [this](http_status status) {
-        parse_error = true;
         SetErrorCode(status);
     };
 

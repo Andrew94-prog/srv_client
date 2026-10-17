@@ -89,8 +89,6 @@ protected:
  */
 class http_request_msg : public http_msg {
 public:
-    bool parse_error = false;  /* request was received, but malformed */
-
     http_request_msg() = default;
 
     /* Create empty request with error code, for requests which
@@ -111,7 +109,7 @@ public:
     http_status GetErrorCode() const { return error_code; }
 
     /* Request is error if it was malformed or received with error */
-    bool IsError() const { return parse_error || error_code != HTTP_STATUS_NONE; }
+    bool IsError() const { return error_code != HTTP_STATUS_NONE; }
     bool IsOk() const { return !IsError(); }
 
     /* Parse request line and header fields of message
@@ -151,8 +149,6 @@ protected:
     std::string method;   /* http method of request */
     std::string target;   /* request target, e.g. "/index.html" */
     std::string version;  /* http version, e.g. "HTTP/1.1" */
-
-private:
     http_status error_code = HTTP_STATUS_NONE;  /* response error code
                                                     for this request,
                                                     HTTP_STATUS_NONE if
