@@ -3,6 +3,7 @@
 #include <string>
 #include <string_view>
 #include <unistd.h>    /* for getpid() in LOG macro */
+#include <cstring>
 
 #include "srv_conn_send_recv.h"
 #include "srv_http_send_recv.h"
@@ -37,107 +38,95 @@ std::string_view get_method_token(std::string_view buf)
 
 } // namespace
 
-/*
- * Receive single http request from client, form response for it
- * and send response back to client.
- * Raw data from client is received by recv_from_curr_conn() into
- * local "fast" buffer recv_buf, which is always enough for any
- * valid http headers (RECV_BUF_SIZE). Body is received into
- * recv_buf in cycle and appended to body field of request.
- * Returns received http_request_<method>_msg object or nullptr,
- * if connection was closed by client or by timeout
- */
-std::shared_ptr<http_request_msg> recv_http_msg()
+
+static std::string_view recv_http_hdr()
 {
     char *recv_buf_p = curr_conn()->recv_buf_p;
-    const size_t recv_buf_size = curr_conn()->recv_buf_size;
-    size_t n_have = 0, hdr_end = 0;
-    std::shared_ptr<http_request_msg> req;
+    ssize_t recv_buf_size = curr_conn()->recv_buf_size;
+    ssize_t n_have = curr_conn()->recv_buf_have;
+    ssize_t n_curr = curr_conn()->recv_buf_curr;
+    ssize_t hdr_size = 0, count;
 
-    /* Receive http headers of request into recv_buf */
-    while (true) {
-        ssize_t count = recv_from_curr_conn(recv_buf_p + n_have,
-                                            recv_buf_size - n_have,
-                                            0, TIMEOUT_INF, true);
-        if (count <= 0) {
-            /* Connection was closed by client due to error */
-            return nullptr;
+    if (n_curr != n_have) {
+        hdr_size = find_http_headers_end(
+                    std::string_view(recv_buf_p + n_curr, n_have - n_curr));
+        if (!hdr_size) {
+            std::memmove(recv_buf_p, recv_buf_p + n_curr, n_have - n_curr);
+            n_have = n_have - n_curr;
+            n_curr = 0;
+            count = recv_from_curr_conn(recv_buf_p, recv_buf_size - n_have,
+                                        n_have, TIMEOUT_INF, true);
+            if (count <= 0)
+                return std::string_view();
+            n_have += count;
         }
+    } else {
+        n_curr = n_have = 0;
+        count = recv_from_curr_conn(recv_buf_p, recv_buf_size, 0,
+                                    TIMEOUT_INF, true);
+        if (count <= 0)
+            return std::string_view();
         n_have += count;
-
-        hdr_end = find_http_headers_end(
-                std::string_view(recv_buf_p, n_have));
-        if (hdr_end)
-            break;
-
-        /* Restrict overall size of http headers by RECV_BUF_SIZE */
-        if (n_have == recv_buf_size) {
-            LOG(LOG_INFO1, "http headers of request are too large\n");
-            return std::make_shared<http_request_msg>(
-                    HTTP_STATUS_HEADER_FIELDS_TOO_LARGE);
-        }
     }
 
-    std::string_view recv_data(recv_buf_p, n_have);
+    if (!hdr_size)
+        hdr_size = find_http_headers_end(std::string_view(
+                            recv_buf_p + n_curr, n_have - n_curr));
 
-    /* Get http method from headers and construct appropriate
-     * http_request_<method>_msg object. For unsupported method
-     * create() returns request with error */
-    std::string_view method = get_method_token(recv_data);
+    curr_conn()->recv_buf_have = n_have;
+    curr_conn()->recv_buf_curr = n_curr + hdr_size;
 
-    req = http_request_msg::Create(method);
+    if (hdr_size)
+        return std::string_view(recv_buf_p + n_curr, hdr_size);
+    else
+        return std::string_view();
+}
 
-    /* Parse all http headers into request class object.
-     * Only header section is passed, remaining bytes in
-     * recv_buf belong to request body. Malformed message
-     * is marked by error_code inside ParseRequestHeader.
-     * Skip parsing for requests already received with error */
+std::shared_ptr<http_request_msg> recv_http_msg()
+{
+    std::string_view http_hdr = recv_http_hdr();
+    if (!http_hdr.size())
+        return nullptr;
+
+    if (http_hdr.size() > MAX_HTTP_HDR_SZIE) {
+        LOG(LOG_INFO1, "http headers of request are too large\n");
+        return std::make_shared<http_request_msg>(
+                    HTTP_STATUS_HEADER_FIELDS_TOO_LARGE);
+    }
+
+    std::string_view method = get_method_token(http_hdr);
+    std::shared_ptr<http_request_msg> req = http_request_msg::Create(method);
     if (req->IsOk())
-        req->ParseRequestHeader(recv_data.substr(0, hdr_end));
+        req->ParseRequestHeader(http_hdr);
 
-    /*
-     * For those methods, which require body: get Content-Length
-     * from headers and receive the remaining body of message
-     * from client using recv_buf in cycle
-     */
-    if (req->IsOk() && http_request_msg::MethodHasBody(req->GetMethod())) {
-        if (!req->HasHeader("Content-Length")) {
-            LOG(LOG_INFO1, "no Content-Length header in request with"
-                    " body, send response with error\n");
-            req->SetErrorCode(HTTP_STATUS_LENGTH_REQUIRED);
-        } else {
-            /* Validity of Content-Length value was already checked
-             * in ParseRequestHeader, so transformation always succeeds */
-            size_t body_len = http_msg::AsSizeT(
+    if (req->IsOk() && http_request_msg::MethodHasBody(method)) {
+        char *recv_buf_p = curr_conn()->recv_buf_p;
+        ssize_t recv_buf_size = curr_conn()->recv_buf_size;
+        ssize_t n_have = curr_conn()->recv_buf_have;
+        ssize_t n_curr = curr_conn()->recv_buf_curr;
+        ssize_t body_len = http_msg::AsSizeT(
                     req->GetHeaderValue("Content-Length"));
+        ssize_t got_len = std::min(n_have - n_curr, body_len);
 
-            if (body_len > MAX_HTTP_BODY_SIZE) {
-                LOG(LOG_INFO1, "http body of request is too large:"
-                        " %lu bytes, send response with error\n",
-                        static_cast<unsigned long>(body_len));
-                req->SetErrorCode(HTTP_STATUS_PAYLOAD_TOO_LARGE);
-            } else {
-                /* Part of body could be already received in recv_buf
-                 * together with headers */
-                size_t left = std::min(n_have - hdr_end, body_len);
+        req->AppendBody(std::string_view(recv_buf_p + n_curr, got_len));
+        n_curr = n_curr + got_len;
 
-                req->AppendBody(recv_data.substr(hdr_end, left));
+        if (n_curr == n_have)
+            n_have = n_curr = 0;
 
-                /* Receive the remaining body of message in cycle */
-                while (req->GetBodySize() < body_len) {
-                    size_t to_recv = std::min(body_len - req->GetBodySize(),
-                                              recv_buf_size);
-                    ssize_t count = recv_from_curr_conn(recv_buf_p, to_recv,
-                                                        0, CLIENT_OP_TIMEOUT,
-                                                        false);
+        curr_conn()->recv_buf_have = n_have;
+        curr_conn()->recv_buf_curr = n_curr;
 
-                    if (count <= 0) {
-                        /* Connection was closed in the middle of body */
-                        return nullptr;
-                    }
-                    req->AppendBody(std::string_view(recv_buf_p, count));
-                }
-            }
+        while (got_len < body_len) {
+            ssize_t to_recv = std::min(body_len - got_len, recv_buf_size);
+            ssize_t count = recv_from_curr_conn(recv_buf_p, to_recv,
+                                                0, CLIENT_OP_TIMEOUT,
+                                                false);
+            if (count != to_recv)
+                return nullptr;
+
+            req->AppendBody(std::string_view(recv_buf_p, count));
+            got_len += count;
         }
     }
 

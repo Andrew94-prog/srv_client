@@ -51,7 +51,7 @@ static bool is_http_message_end(char *recv_buf, ssize_t prev_n_recv,
 ssize_t recv_from_curr_conn(char *buf, ssize_t to_recv, ssize_t n_recv,
                             time_t timeout, bool terminator)
 {
-    ssize_t count;
+    ssize_t count, prev_n_recv = n_recv;
     bool recv_term = false, recv_timeout = false;
 
     curr_conn_update_active();
@@ -98,7 +98,7 @@ ssize_t recv_from_curr_conn(char *buf, ssize_t to_recv, ssize_t n_recv,
         }
     }
 
-    return n_recv;
+    return n_recv - prev_n_recv;
 }
 
 ssize_t send_to_curr_conn(const char *buf, ssize_t to_send,

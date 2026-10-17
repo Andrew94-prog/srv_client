@@ -3,6 +3,7 @@
 
 /* Maximum size of http message body */
 #define MAX_HTTP_BODY_SIZE	(32UL * 1024 * 1024)
+#define MAX_HTTP_HDR_SZIE	2048
 
 #define STACK_SIZE		32768
 #define RECV_BUF_SIZE	8192

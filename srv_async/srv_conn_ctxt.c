@@ -57,6 +57,8 @@ static conn_t *alloc_conn_ctx_mem(void)
     conn->ctx_buf_size = CTX_BUF_SIZE;
     conn->recv_buf_p = ctx_buf;
     conn->recv_buf_size = RECV_BUF_SIZE;
+    conn->recv_buf_have = 0;
+    conn->recv_buf_curr = 0;
     conn->ss_sp = ctx_buf + RECV_BUF_SIZE + GUARD_SIZE;
     conn->ss_size = STACK_SIZE;
 

@@ -28,6 +28,8 @@ typedef struct Conn {
     ssize_t ctx_buf_size;
     char *recv_buf_p;
     ssize_t recv_buf_size;
+    ssize_t recv_buf_have;
+    ssize_t recv_buf_curr;
     char *ss_sp;
     ssize_t ss_size;
 

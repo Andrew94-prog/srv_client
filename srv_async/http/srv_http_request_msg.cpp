@@ -14,28 +14,28 @@
 
 void http_request_msg::ParseRequestHeader(std::string_view buf)
 {
-    auto fail = [this]() {
+    auto fail = [this](http_status status) {
         parse_error = true;
-        SetErrorCode(HTTP_STATUS_BAD_REQUEST);
+        SetErrorCode(status);
     };
 
     /* Parse request line: METHOD SP request-target SP HTTP-version CRLF */
     size_t line_end = buf.find(srv_http::CRLF);
     if (line_end == std::string_view::npos)
-        return fail();
+        return fail(HTTP_STATUS_BAD_REQUEST);
 
     std::string_view line = buf.substr(0, line_end);
     size_t sp1 = line.find(' ');
     size_t sp2 = line.rfind(' ');
     if (sp1 == std::string_view::npos || sp1 == sp2)
-        return fail();
+        return fail(HTTP_STATUS_BAD_REQUEST);
 
     std::string_view method_v = line.substr(0, sp1);
     std::string_view target_v = line.substr(sp1 + 1, sp2 - sp1 - 1);
     std::string_view version_v = line.substr(sp2 + 1);
     if (method_v.empty() || target_v.empty() ||
             !version_v.starts_with("HTTP/"))
-        return fail();
+        return fail(HTTP_STATUS_BAD_REQUEST);
     method = method_v;
     target = target_v;
     version = version_v;
@@ -48,19 +48,22 @@ void http_request_msg::ParseRequestHeader(std::string_view buf)
     while (!p.empty()) {
         line_end = p.find(srv_http::CRLF);
         if (line_end == std::string_view::npos)
-            return fail();
+            return fail(HTTP_STATUS_BAD_REQUEST);
 
         line = p.substr(0, line_end);
         if (!line.empty()) {
             size_t colon = line.find(':');
             if (colon == std::string_view::npos)
-                return fail();
+                return fail(HTTP_STATUS_BAD_REQUEST);
 
             std::string_view name = line.substr(0, colon);
             std::string_view value =
                     srv_http::trim_spaces(line.substr(colon + 1));
 
             if (srv_http::to_lower(name) == "content-length") {
+                if (!http_request_msg::MethodHasBody(method))
+                    return fail(HTTP_STATUS_BAD_REQUEST);
+
                 /* Content-Length value must be a decimal number */
                 size_t len;
                 auto [ptr, ec] = std::from_chars(value.data(),
@@ -69,7 +72,9 @@ void http_request_msg::ParseRequestHeader(std::string_view buf)
 
                 if (ec != std::errc() ||
                         ptr != value.data() + value.size())
-                    return fail();
+                    return fail(HTTP_STATUS_BAD_REQUEST);
+                if (len > MAX_HTTP_BODY_SIZE)
+                    return fail(HTTP_STATUS_PAYLOAD_TOO_LARGE);
                 AddHeader(name, len);
             } else {
                 AddHeader(name, value);
@@ -77,6 +82,10 @@ void http_request_msg::ParseRequestHeader(std::string_view buf)
         }
         p.remove_prefix(std::min(line_end + srv_http::CRLF.size(), p.size()));
     }
+
+    if (http_request_msg::MethodHasBody(method) &&
+            !HasHeader("content-length"))
+        return fail(HTTP_STATUS_LENGTH_REQUIRED);
 }
 
 bool http_request_msg::WantKeepAlive() const
