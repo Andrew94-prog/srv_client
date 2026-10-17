@@ -127,6 +127,8 @@ std::shared_ptr<http_request_msg> recv_http_msg()
 
             req->AppendBody(std::string_view(recv_buf_p, count));
             got_len += count;
+
+            cond_swap_to_main_ctx();
         }
     }
 
@@ -150,6 +152,8 @@ ssize_t send_http_msg(const std::shared_ptr<http_response_msg> &resp)
             return 0;
 
         curr += to_send;
+
+        cond_swap_to_main_ctx();
     }
 
     return size;
@@ -191,6 +195,8 @@ bool handle_one_client_request()
         LOG(LOG_INFO1, "client requested connection close\n");
         return false;
     }
+
+    cond_swap_to_main_ctx();
 
     return true;
 }

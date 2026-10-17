@@ -215,6 +215,12 @@ bool curr_conn_op_timeout(time_t timeout)
             timeout) ? true : false;
 }
 
+bool need_ctx_swap(void)
+{
+    return (curr_time() - p_conn_queue.last_ctx_swap >
+            CTX_SWAP_TIMEOUT) ? true : false;
+}
+
 void free_closed_conn(conn_t *conn)
 {
     free_conn_ctx(conn);
@@ -230,7 +236,15 @@ int swap_to_main_ctx(void)
         exit(EXIT_FAILURE);
     }
 
+    p_conn_queue.last_ctx_swap = curr_time();
+
     return 0;
+}
+
+void cond_swap_to_main_ctx(void)
+{
+    if (need_ctx_swap())
+        swap_to_main_ctx();
 }
 
 int swap_to_conn_ctx(conn_t *conn)
@@ -242,6 +256,8 @@ int swap_to_conn_ctx(conn_t *conn)
             " conn_sock = %d, conn = %p\n", conn->conn_sock, conn);
         exit(EXIT_FAILURE);
     }
+
+    p_conn_queue.last_ctx_swap = curr_time();
 
     return 0;
 }
