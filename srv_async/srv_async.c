@@ -59,10 +59,9 @@ static void init_srv_config_default(void)
     SRV_CONFIG.log_file_name = NULL;
     SRV_CONFIG.log_file_desc = stdout;
     SRV_CONFIG.log_level = 0;
-    SRV_CONFIG.help = false;
 }
 
-int main(int argc, char *argv[])
+int main(void)
 {
     int srv_sock, srv_port, n_w;
     int ret, i;
@@ -71,20 +70,10 @@ int main(int argc, char *argv[])
 
     ret = parse_srv_config();
     if (ret < 0) {
-        fprintf(stderr, "%s(): config file parsing failed\n", __func__);
-        fprintf(stderr, "%s", HELP_MSG);
-    }
-
-    ret = parse_srv_cmdline_opts(argc, argv);
-    if (ret < 0) {
-        fprintf(stderr, "%s(): parse cmdline opts failed\n", __func__);
-        fprintf(stderr, "%s", HELP_MSG);
+        fprintf(stderr, "%s(): could not parse config file %s\n",
+                __func__, SRV_CONFIG_FILE);
+        fprintf(stderr, HELP_MSG, MAX_NUM_WORKERS, LOG_INFO2);
         exit(EXIT_FAILURE);
-    }
-
-    if (SRV_CONFIG.help) {
-        printf("%s", HELP_MSG);
-        return 0;
     }
 
     print_srv_config();
