@@ -3,7 +3,10 @@ CPPOBJS := http/srv_http_send_recv.o http/srv_http_msg.o \
            http/srv_http_request_msg.o http/srv_http_response_msg.o \
            http/srv_http_request_get.o http/srv_http_request_head.o \
            http/srv_http_request_post.o http/srv_http_request_put.o \
-           http/srv_http_request_delete.o http/srv_http_request_patch.o
+           http/srv_http_request_delete.o http/srv_http_request_patch.o \
+           libdb/srv_db.o
+
+LDLIBS := -lmysqlcppconn
 
 DEPS := $(COBJS:.o=.o.d) $(CPPOBJS:.o=.o.d)
 
@@ -21,7 +24,7 @@ CPPFLAGS=-Wall -std=c++20 -I.
 	mv $@.d.tmp $@.d
 
 srv_async: $(COBJS) $(CPPOBJS)
-	$(CXX) $^ -o $@
+	$(CXX) $^ -o $@ $(LDLIBS)
 
 clean:
 	rm -f *.o http/*.o
