@@ -52,6 +52,74 @@ static int parse_log_file_name(const char *val_str)
     return 0;
 }
 
+/* Allocate copy of val_str and store it in *dst.
+ * Value is replaced if parameter was already set */
+static int parse_string_value(const char *val_str, char **dst,
+                              const char *p_name)
+{
+    char *tmp;
+
+    tmp = (char *) malloc(strlen(val_str) + 1);
+    if (!tmp) {
+        fprintf(stderr, "%s(): could not allocate %ld bytes for "
+                "'%s' in %s\n", __func__, strlen(val_str) + 1,
+                p_name, SRV_CONFIG_FILE);
+        return -ENOMEM;
+    }
+
+    strcpy(tmp, val_str);
+    free(*dst);
+    *dst = tmp;
+
+    return 0;
+}
+
+/* Parse 'base_dir' parameter: store copy of val_str in
+ * SRV_CONFIG.base_dir. Relative path is prepended with server's
+ * current working directory, absolute path is stored as is.
+ * Value is replaced if parameter was already set */
+static int parse_base_dir(const char *val_str)
+{
+    char *val, *cwd = NULL;
+    size_t len;
+
+    if (val_str[0] != '/') {
+        cwd = getcwd(NULL, 0);
+        if (cwd == NULL) {
+            fprintf(stderr, "%s(): could not get current working "
+                    "directory: %s\n", __func__, strerror(errno));
+            return -errno;
+        }
+
+        /* current dir + '/' + relative base_dir + '\0' */
+        len = strlen(cwd) + 1 + strlen(val_str) + 1;
+        val = (char *) malloc(len);
+        if (val == NULL) {
+            free(cwd);
+            fprintf(stderr, "%s(): could not allocate %ld bytes for "
+                    "'base_dir' in %s\n", __func__, len,
+                    SRV_CONFIG_FILE);
+            return -ENOMEM;
+        }
+        snprintf(val, len, "%s/%s", cwd, val_str);
+        free(cwd);
+    } else {
+        val = (char *) malloc(strlen(val_str) + 1);
+        if (val == NULL) {
+            fprintf(stderr, "%s(): could not allocate %ld bytes for "
+                    "'base_dir' in %s\n", __func__,
+                    strlen(val_str) + 1, SRV_CONFIG_FILE);
+            return -ENOMEM;
+        }
+        strcpy(val, val_str);
+    }
+
+    free(SRV_CONFIG.base_dir);
+    SRV_CONFIG.base_dir = val;
+
+    return 0;
+}
+
 static char *trim_spaces(char *s)
 {
     int w = 0;
@@ -115,6 +183,47 @@ static int parse_srv_config_line(char *line)
             return ret;
 
         SRV_CONFIG.log_level = val;
+    } else if (strcmp(key, "base_dir") == 0) {
+        ret = parse_base_dir(val_str);
+        if (ret)
+            return ret;
+    } else if (strcmp(key, "host_name") == 0) {
+        ret = parse_string_value(val_str, &SRV_CONFIG.host_name,
+                                 "host_name");
+        if (ret)
+            return ret;
+    } else if (strcmp(key, "db_socket") == 0) {
+        ret = parse_string_value(val_str, &SRV_CONFIG.db_socket,
+                                 "db_socket");
+        if (ret)
+            return ret;
+    } else if (strcmp(key, "db_name") == 0) {
+        ret = parse_string_value(val_str, &SRV_CONFIG.db_name,
+                                 "db_name");
+        if (ret)
+            return ret;
+    } else if (strcmp(key, "db_user") == 0) {
+        ret = parse_string_value(val_str, &SRV_CONFIG.db_user,
+                                 "db_user");
+        if (ret)
+            return ret;
+    } else if (strcmp(key, "db_password") == 0) {
+        ret = parse_string_value(val_str, &SRV_CONFIG.db_password,
+                                 "db_password");
+        if (ret)
+            return ret;
+    }
+
+    return 0;
+}
+
+/* Check that base_dir path is accessible for read and write */
+int validate_srv_base_dir(const char *path)
+{
+    if (access(path, R_OK | W_OK) != 0) {
+        fprintf(stderr, "%s(): base_dir '%s' is not accessible for "
+                "read and write: %s\n", __func__, path, strerror(errno));
+        return -EACCES;
     }
 
     return 0;
