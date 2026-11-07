@@ -11,7 +11,6 @@
 #include "srv_http_msg.h"
 #include "srv_http_msg_internal.h"
 
-namespace srv_http {
 
 std::string to_lower(std::string_view s)
 {
@@ -50,7 +49,6 @@ std::string_view trim_spaces(std::string_view s)
     return s;
 }
 
-} // namespace srv_http
 
 /* Text description of http status codes, indexed by code value.
  * Size is greater than the maximum used code, so that any
@@ -76,23 +74,23 @@ void http_msg::AddHeader(std::string_view name, std::string_view value)
 {
     /* Header names are case-insensitive, use lowercased
      * name as key in unordered_map for fast lookup */
-    headers[srv_http::to_lower(name)] = std::string(value);
+    headers[to_lower(name)] = std::string(value);
 }
 
 void http_msg::AddHeader(std::string_view name, size_t value)
 {
-    headers[srv_http::to_lower(name)] = value;
+    headers[to_lower(name)] = value;
 }
 
 bool http_msg::HasHeader(std::string_view name) const
 {
-    return headers.contains(srv_http::to_lower(name));
+    return headers.contains(to_lower(name));
 }
 
-http_msg::header_value_t http_msg::GetHeaderValue(
+header_value_t http_msg::GetHeaderValue(
         std::string_view name) const
 {
-    auto it = headers.find(srv_http::to_lower(name));
+    auto it = headers.find(to_lower(name));
 
     if (it == headers.end())
         return header_value_t();
@@ -103,7 +101,7 @@ void http_msg::SerializeHeadersAndBody(std::ostringstream &out) const
 {
     for (const auto &[name, value] : headers)
         std::visit([&out, &name](const auto &v) {
-            out << name << ": " << v << srv_http::CRLF;
+            out << name << ": " << v << HTTP_CRLF;
         }, value);
-    out << srv_http::CRLF << body;
+    out << HTTP_CRLF << body;
 }

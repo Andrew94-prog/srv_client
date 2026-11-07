@@ -177,7 +177,7 @@ bool handle_one_client_request()
         req->GetVersion().c_str());
     LOG(LOG_INFO2, "%s\n", req->Serialize().c_str());
 
-    std::shared_ptr<http_response_msg> resp = req->MakeResponse();
+    std::shared_ptr<http_response_msg> resp = req->ServeRequest();
     if (send_http_msg(resp) <= 0) {
         LOG(LOG_ERROR, "failed to send response to client"
             " conn_sock = %d, conn = %p\n",

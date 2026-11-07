@@ -11,6 +11,7 @@
 #include <vector>
 #include <functional>
 
+class http_request_msg;
 class http_response_msg;
 
 /* All http response status codes used by server.
@@ -20,6 +21,7 @@ enum http_status {
     HTTP_STATUS_NONE = 0,               /* no error, request is valid */
     HTTP_STATUS_OK = 200,
     HTTP_STATUS_BAD_REQUEST = 400,
+    HTTP_STATUS_FORBIDDEN = 403,
     HTTP_STATUS_NOT_FOUND = 404,
     HTTP_STATUS_METHOD_NOT_ALLOWED = 405,
     HTTP_STATUS_REQUEST_TIMEOUT = 408,
@@ -30,9 +32,15 @@ enum http_status {
     HTTP_STATUS_HEADER_FIELDS_TOO_LARGE = 431,
 };
 
+constexpr std::string_view HTTP_CRLF = "\r\n";
+
 /* Text description for each status code from http_status enum.
  * http_status_text[code] is "" for codes not used by server */
 extern const std::vector<std::string> http_status_text;
+
+using header_value_t = std::variant<std::string, size_t>;
+using http_request_ptr_t = std::shared_ptr<http_request_msg>;
+using http_response_ptr_t = std::shared_ptr<http_response_msg>;
 
 /*
  * Generic http message: header fields + optional body.
@@ -42,9 +50,6 @@ extern const std::vector<std::string> http_status_text;
  */
 class http_msg {
 public:
-    /* All possible types of header field value */
-    using header_value_t = std::variant<std::string, size_t>;
-
     http_msg() = default;
     virtual ~http_msg() = default;
 
@@ -104,6 +109,24 @@ public:
     const std::string &GetMethod() const { return method; }
     const std::string &GetTarget() const { return target; }
     const std::string &GetVersion() const { return version; }
+    const std::string &GetHost() const { return host; }
+
+    /* Check if 'host' of request matches host_name from server
+     * config (case-insensitive). If host_name is not set in
+     * config, any host is considered matching */
+    bool IsHostMatching() const;
+
+    /* Request target split into parts (valid only if ParseTarget()
+     * succeeded, i.e. request is valid): decoded and normalized
+     * path, raw query string without leading '?' */
+    const std::string &GetPath() const { return path; }
+    const std::string &GetQuery() const { return query; }
+
+    /* Value of query string parameter with given name (decoded,
+     * '+' is decoded as space). Returns nullptr if there is no
+     * such parameter. If parameter is repeated, value of the
+     * first occurrence is returned */
+    const std::string *GetQueryParam(std::string_view name) const;
 
     void SetErrorCode(http_status code) { error_code = code; }
     http_status GetErrorCode() const { return error_code; }
@@ -121,8 +144,7 @@ public:
      * HTTP/1.0 is not, "Connection" header overrides default */
     bool WantKeepAlive() const;
 
-    /* Form response message for this request */
-    virtual std::shared_ptr<http_response_msg> MakeResponse();
+    std::shared_ptr<http_response_msg> ServeRequest();
 
     virtual std::string Serialize() const;
 
@@ -149,14 +171,40 @@ protected:
     std::string method;   /* http method of request */
     std::string target;   /* request target, e.g. "/index.html" */
     std::string version;  /* http version, e.g. "HTTP/1.1" */
+    std::string host;     /* value of 'host' header field of request */
+    std::string path;     /* request target path: percent-decoded,
+                             normalized, without query string */
+    std::string query;    /* raw query string of request target,
+                             without leading '?' */
     http_status error_code = HTTP_STATUS_NONE;  /* response error code
                                                     for this request,
                                                     HTTP_STATUS_NONE if
                                                     request is valid */
 
+    /* Parse target of request: check that it has origin-form,
+     * split it into path and query string, percent-decode path
+     * and normalize it (remove ".", ".." and empty segments).
+     * On malformed target (non-origin form, invalid percent
+     * escapes, traversal above root) sets error_code to
+     * HTTP_STATUS_BAD_REQUEST */
+    void ParseTarget();
+
+    /* Percent-decode string: each %XX is replaced by byte with
+     * hex value XX. Returns false on invalid escape sequence.
+     * plus_as_space selects if '+' is decoded as space (true for
+     * query string values, false for path) */
+    static bool PercentDecode(std::string_view in, bool plus_as_space,
+                              std::string &out);
+
+    /* Parse query string into parameters on first access */
+    void ParseQueryParams() const;
+
+    mutable std::vector<std::pair<std::string, std::string>> query_params;
+    mutable bool query_parsed = false;
+
 protected:
     /* Hook for derived classes: form response for valid request */
-    virtual std::shared_ptr<http_response_msg> MakeOkResponse();
+    virtual std::shared_ptr<http_response_msg> ServeMethodRequest();
 };
 
 /* -------------------------------------------------------------- */
@@ -164,37 +212,42 @@ protected:
 
 class http_request_get_msg : public http_request_msg {
 public:
-    std::shared_ptr<http_response_msg> MakeOkResponse() override;
+    http_response_ptr_t ServeMethodRequest() override;
+private:
+    http_response_ptr_t ServeFileRequest();
+    http_response_ptr_t ServeApiRequest();
 };
 
 class http_request_head_msg : public http_request_msg {
 public:
-    std::shared_ptr<http_response_msg> MakeOkResponse() override;
+    http_response_ptr_t ServeMethodRequest() override;
+private:
+    http_response_ptr_t ServeFileRequest();
+    http_response_ptr_t ServeApiRequest();
 };
 
 class http_request_post_msg : public http_request_msg {
 public:
-    std::shared_ptr<http_response_msg> MakeOkResponse() override;
+    http_response_ptr_t ServeMethodRequest() override;
 };
 
 class http_request_put_msg : public http_request_msg {
 public:
-    std::shared_ptr<http_response_msg> MakeOkResponse() override;
+    http_response_ptr_t ServeMethodRequest() override;
 };
 
 class http_request_delete_msg : public http_request_msg {
 public:
-    std::shared_ptr<http_response_msg> MakeOkResponse() override;
+    http_response_ptr_t ServeMethodRequest() override;
 };
 
 class http_request_patch_msg : public http_request_msg {
 public:
-    std::shared_ptr<http_response_msg> MakeOkResponse() override;
+    http_response_ptr_t ServeMethodRequest() override;
 };
 
 /* -------------------------------------------------------------- */
 
-/* The only type for http response to client at least now */
 class http_response_msg : public http_msg {
 public:
     http_status status_code = HTTP_STATUS_OK;
@@ -202,7 +255,7 @@ public:
 
     http_response_msg() = default;
     http_response_msg(http_status code) :
-        status_code(code), status_text(http_status_text[static_cast<size_t>(code)]) {}
+        status_code(code), status_text(http_status_text[code]) {}
 
     std::string Serialize() const override;
 };

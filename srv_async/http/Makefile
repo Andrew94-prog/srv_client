@@ -2,7 +2,8 @@ HTTPOBJS := srv_http_send_recv.o srv_http_msg.o \
             srv_http_request_msg.o srv_http_response_msg.o \
             srv_http_request_get.o srv_http_request_head.o \
             srv_http_request_post.o srv_http_request_put.o \
-            srv_http_request_delete.o srv_http_request_patch.o
+            srv_http_request_delete.o srv_http_request_patch.o \
+            srv_http_msg_internal.o
 
 HTTP_OBJS := $(addprefix http/,$(HTTPOBJS))
 HTTP_DEPS := $(HTTP_OBJS:.o=.o.d)

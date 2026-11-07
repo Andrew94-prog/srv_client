@@ -10,9 +10,10 @@
 
 #include "srv_http_msg.h"
 
-namespace srv_http {
+#define BASE_DIR SRV_CONFIG.base_dir
 
-constexpr std::string_view CRLF = "\r\n";
+extern const std::unordered_map<std::string, std::string> MIME_TYPES;
+
 
 std::string to_lower(std::string_view s);
 
@@ -21,24 +22,32 @@ bool contains_ci(std::string_view haystack, std::string_view needle);
 
 std::string_view trim_spaces(std::string_view s);
 
-using response_ptr_t = std::shared_ptr<http_response_msg>;
+/* MIME type of file by its extension. For unknown extension
+ * returns "application/octet-stream" */
+std::string guess_mime_type(const std::string &file_path);
 
-/* Fill common headers and create response with html page in body */
-response_ptr_t make_page_response(http_status code,
-                                  const http_request_msg &req,
-                                  std::string_view title,
-                                  const std::string &body_html,
-                                  bool omit_body);
+std::string make_date_hdr();
 
-/* Response with error code for invalid or unhandled requests */
-response_ptr_t make_error_response(http_status code,
-                                   const http_request_msg &req);
+std::string make_http_error_msg_body(http_status code,
+                                    const std::string &body_text);
 
-/* Server's main page response. The only difference for HEAD is
- * absence of body in response */
-response_ptr_t make_main_page_response(const http_request_msg &req,
-                                       bool omit_body);
+std::string make_simple_html_page(const std::string &title,
+                                const std::string &body);
 
-} // namespace srv_http
+http_response_ptr_t make_http_base_response(http_status code, bool keep_alive,
+                                            const std::string &mime_type,
+                                            size_t body_size,
+                                            const std::string &body);
+
+http_response_ptr_t make_http_error_response(http_status code, bool keep_alive,
+                                            const std::string &add_text = "");
+
+http_response_ptr_t make_http_ok_response(bool keep_alive,
+                                        const std::string &mime_type,
+                                        const std::string &body = "");
+
+http_response_ptr_t make_http_ok_response(bool keep_alive,
+                                        const std::string &mime_type,
+                                        size_t body_size = 0);                                       
 
 #endif /* SRV_HTTP_MSG_INTERNAL_H */
