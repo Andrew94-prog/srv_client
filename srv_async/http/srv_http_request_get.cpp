@@ -5,6 +5,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <iostream>
 
 #include "srv_config.h"
 #include "srv_http_msg.h"
@@ -14,6 +15,8 @@
 
 http_response_ptr_t http_request_get_msg::ServeFileRequest()
 {
+    path = SRV_CONFIG.base_dir + path;
+
     std::FILE *f = std::fopen(GetPath().c_str(), "rb");
     if (f == nullptr)
         return make_http_error_response(HTTP_STATUS_NOT_FOUND, WantKeepAlive(),
@@ -109,8 +112,11 @@ http_response_ptr_t http_request_get_msg::ServeMethodRequest()
         }
     }
 
-    if (GetPath().starts_with("/api/"))
+    if (GetPath().starts_with("/api/")) {
         return ServeApiRequest();
-    else
+    } else {
+        if (GetPath() == "/")
+            path += "index.html";
         return ServeFileRequest();
+    }
 }
