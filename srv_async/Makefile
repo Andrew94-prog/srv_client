@@ -20,8 +20,9 @@ clean::
 
 include http/Makefile
 include libdb/Makefile
+include libfs/Makefile
 
-ALLOBJS := $(COBJS) $(HTTP_OBJS) $(DBOBJS)
+ALLOBJS := $(COBJS) $(HTTP_OBJS) $(DBOBJS) $(FSOBJS)
 
 srv_async: $(ALLOBJS)
 	$(CXX) $^ -o $@ $(LDLIBS)

@@ -1,3 +1,5 @@
+#include <cstdio>
+
 #ifndef SRV_CONFIG_H
 #define SRV_CONFIG_H
 

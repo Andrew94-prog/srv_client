@@ -187,8 +187,8 @@ bool handle_one_client_request()
 
     LOG(LOG_INFO1, "sent request to client conn_sock = %d, conn = %p\n",
         curr_conn_sock(), curr_conn());
-    LOG(LOG_INFO1, "response: code = %d, %s\n", static_cast<int>(resp->status_code),
-        resp->status_text.c_str());
+    LOG(LOG_INFO1, "response: code = %d, %s\n", resp->GetStatusCode(),
+        resp->GetStatusText().c_str());
     LOG(LOG_INFO2, "%s\n", resp->Serialize().c_str());
 
     if (!req->WantKeepAlive()) {

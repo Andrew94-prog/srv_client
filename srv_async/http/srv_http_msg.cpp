@@ -12,48 +12,8 @@
 #include "srv_http_msg_internal.h"
 
 
-std::string to_lower(std::string_view s)
-{
-    std::string result(s);
-
-    for (char &c : result)
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    return result;
-}
-
-bool contains_ci(std::string_view haystack, std::string_view needle)
-{
-    if (needle.empty() || haystack.size() < needle.size())
-        return false;
-
-    for (size_t i = 0; i <= haystack.size() - needle.size(); i++) {
-        size_t j = 0;
-
-        while (j < needle.size() &&
-               std::tolower(static_cast<unsigned char>(haystack[i + j])) ==
-               std::tolower(static_cast<unsigned char>(needle[j])))
-            j++;
-        if (j == needle.size())
-            return true;
-    }
-
-    return false;
-}
-
-std::string_view trim_spaces(std::string_view s)
-{
-    while (!s.empty() && s.front() == ' ')
-        s.remove_prefix(1);
-    while (!s.empty() && s.back() == ' ')
-        s.remove_suffix(1);
-    return s;
-}
-
-
-/* Text description of http status codes, indexed by code value.
- * Size is greater than the maximum used code, so that any
- * http_status value is a valid index; unused codes hold "" */
-const std::vector<std::string> http_status_text = [] {
+const std::string HTTP_CRLF = "\r\n";
+const std::vector<std::string> HTTP_STATUS_TEXT = [] {
     std::vector<std::string> text(HTTP_STATUS_HEADER_FIELDS_TOO_LARGE + 1);
 
     text[HTTP_STATUS_OK] = "OK";
@@ -70,10 +30,26 @@ const std::vector<std::string> http_status_text = [] {
     return text;
 }();
 
+const std::unordered_map<std::string, std::string>
+            MIME_TYPES = {
+    {".html", "text/html; charset=UTF-8"},
+    {".htm",  "text/html; charset=UTF-8"},
+    {".css",  "text/css; charset=UTF-8"},
+    {".js",   "text/javascript; charset=UTF-8"},
+    {".txt",  "text/plain; charset=UTF-8"},
+    {".json", "application/json; charset=UTF-8"},
+    {".png",  "image/png"},
+    {".jpg",  "image/jpeg"},
+    {".jpeg", "image/jpeg"},
+    {".gif",  "image/gif"},
+    {".svg",  "image/svg+xml"},
+    {".ico",  "image/x-icon"},
+    {".pdf",  "application/pdf"},
+    {".bin",  "application/octet-stream"},
+};
+
 void http_msg::AddHeader(std::string_view name, std::string_view value)
 {
-    /* Header names are case-insensitive, use lowercased
-     * name as key in unordered_map for fast lookup */
     headers[to_lower(name)] = std::string(value);
 }
 

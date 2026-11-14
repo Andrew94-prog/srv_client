@@ -16,7 +16,7 @@
 
 void http_request_msg::ParseRequestHeader(std::string_view buf)
 {
-    auto fail = [this](http_status status) {
+    auto fail = [this](HTTP_STATUS status) {
         SetErrorCode(status);
     };
 
@@ -192,7 +192,7 @@ bool http_request_msg::PercentDecode(std::string_view in,
     return true;
 }
 
-void http_request_msg::ParseQueryParams() const
+void http_request_msg::ParseQueryParams()
 {
     if (query_parsed)
         return;
@@ -227,7 +227,7 @@ void http_request_msg::ParseQueryParams() const
 }
 
 const std::string *http_request_msg::GetQueryParam(
-        std::string_view name) const
+        std::string_view name)
 {
     ParseQueryParams();
 
@@ -240,7 +240,7 @@ const std::string *http_request_msg::GetQueryParam(
 bool http_request_msg::WantKeepAlive() const
 {
     /* Close connection after response on any error */
-    if (IsError())
+    if (!IsOk())
         return false;
 
     if (HasHeader("Connection")) {
@@ -273,7 +273,7 @@ http_request_msg::methods_info = {
                 true}},
 };
 
-http_request_ptr_t http_request_msg::Create(
+request_ptr_t http_request_msg::Create(
         std::string_view method)
 {
     auto it = methods_info.find(std::string(method));
@@ -282,7 +282,7 @@ http_request_ptr_t http_request_msg::Create(
     if (it == methods_info.end()) {
         LOG(LOG_INFO1, "unsupported http method in request:"
                 " %.*s, send response with error\n",
-            static_cast<int>(method.size()), method.data());
+                static_cast<int>(method.size()), method.data());
         return std::make_shared<http_request_msg>(
                 HTTP_STATUS_METHOD_NOT_ALLOWED, method);
     }
@@ -311,17 +311,17 @@ std::string http_request_msg::Serialize() const
     return out.str();
 }
 
-http_response_ptr_t http_request_msg::ServeRequest()
+response_ptr_t http_request_msg::ServeRequest()
 {
-    if (IsError())
-        return make_http_error_response(GetErrorCode(), false);
+    if (!IsOk())
+        return make_http_response(*this, GetErrorCode());
 
     return ServeMethodRequest();
 }
 
-http_response_ptr_t http_request_msg::ServeMethodRequest()
+response_ptr_t http_request_msg::ServeMethodRequest()
 {
     /* Should not be called for valid requests of base class type */
-    return make_http_error_response(
-            HTTP_STATUS_INTERNAL_SERVER_ERROR, false);
+    return make_http_response(*this,
+            HTTP_STATUS_INTERNAL_SERVER_ERROR);
 }
