@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include "srv_defs.h"
+#include "srv_conn_ctxt.h"
 #include "srv_fs.h"
 
 using namespace std;
@@ -54,6 +55,8 @@ string download_file(const string &fpath)
 
     for (size_t i = 0; i < size; i += FS_ACCESS_BLOCK_SIZE) {
         file.read(content.data() + i, min(FS_ACCESS_BLOCK_SIZE, size - i));
+
+        cond_swap_to_main_ctx();
     }
 
     return content;
@@ -69,6 +72,8 @@ int upload_file(const string &fpath, const string &content)
 
     for (size_t i = 0; i < size; i += FS_ACCESS_BLOCK_SIZE) {
         file.write(content.data() + i, min(FS_ACCESS_BLOCK_SIZE, size - i));
+
+        cond_swap_to_main_ctx();
     }
 
     return 0;
