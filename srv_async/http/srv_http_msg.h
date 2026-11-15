@@ -15,7 +15,6 @@ class http_request_msg;
 class http_response_msg;
 
 enum HTTP_STATUS {
-    HTTP_STATUS_NONE = 0,
     HTTP_STATUS_OK = 200,
     HTTP_STATUS_BAD_REQUEST = 400,
     HTTP_STATUS_FORBIDDEN = 403,
@@ -81,7 +80,7 @@ protected:
 
 class http_request_msg : public http_msg {
 public:
-    http_request_msg() = default;
+    http_request_msg() : error_code(HTTP_STATUS_OK) {};
     virtual ~http_request_msg() = default;
 
     http_request_msg(HTTP_STATUS err_code) : error_code(err_code) {};
