@@ -314,7 +314,7 @@ std::string http_request_msg::Serialize() const
 response_ptr_t http_request_msg::ServeRequest()
 {
     if (!IsOk())
-        return make_http_response(*this, GetErrorCode());
+        return make_http_response(*this, GetErrorCode(), "");
 
     return ServeMethodRequest();
 }
@@ -323,5 +323,5 @@ response_ptr_t http_request_msg::ServeMethodRequest()
 {
     /* Should not be called for valid requests of base class type */
     return make_http_response(*this,
-            HTTP_STATUS_INTERNAL_SERVER_ERROR);
+            HTTP_STATUS_INTERNAL_SERVER_ERROR, "Internal server error");
 }
