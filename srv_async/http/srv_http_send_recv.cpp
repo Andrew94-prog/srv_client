@@ -95,7 +95,7 @@ std::shared_ptr<http_request_msg> recv_http_msg()
     }
 
     std::string_view method = get_method_token(http_hdr);
-    std::shared_ptr<http_request_msg> req = http_request_msg::Create(method);
+    request_ptr_t req = http_request_msg::Create(method);
     if (req->IsOk())
         req->ParseRequestHeader(http_hdr);
 

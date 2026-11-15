@@ -108,12 +108,12 @@ public:
      * if method can have body in request
      */
     struct method_info_t {
-        std::function<std::shared_ptr<http_request_msg>()> creator;
+        std::function<request_ptr_t()> creator;
         bool has_body;
     };
     static const std::unordered_map<std::string, method_info_t>
             methods_info;
-    static std::shared_ptr<http_request_msg> Create(std::string_view method);
+    static request_ptr_t Create(std::string_view method);
     static bool MethodHasBody(std::string_view method);
 
     virtual std::string Serialize() const;
