@@ -107,7 +107,7 @@ void http_request_msg::ParseTarget()
 
     if (qmark != std::string::npos) {
         path = target.substr(0, qmark);
-        query = target.substr(qmark + 1);
+        query_s = target.substr(qmark + 1);
     } else {
         path = target;
     }
@@ -151,6 +151,8 @@ void http_request_msg::ParseTarget()
     if (normalized.empty())
         normalized = "/";
     path = std::move(normalized);
+
+    ParseQueryParams();
 }
 
 bool http_request_msg::PercentDecode(std::string_view in,
@@ -194,19 +196,15 @@ bool http_request_msg::PercentDecode(std::string_view in,
 
 void http_request_msg::ParseQueryParams()
 {
-    if (query_parsed)
-        return;
-    query_parsed = true;
-
     /* Query string is a sequence of key=value pairs separated
      * by '&'. Key and value are percent-decoded, both may be
      * empty, '=' may be omitted */
     size_t pos = 0;
 
-    while (pos <= query.size()) {
-        size_t amp = query.find('&', pos);
-        std::string_view pair(query.data() + pos,
-                (amp == std::string::npos ? query.size() : amp) - pos);
+    while (pos <= query_s.size()) {
+        size_t amp = query_s.find('&', pos);
+        std::string_view pair(query_s.data() + pos,
+                (amp == std::string::npos ? query_s.size() : amp) - pos);
 
         if (!pair.empty()) {
             size_t eq = pair.find('=');
@@ -217,7 +215,8 @@ void http_request_msg::ParseQueryParams()
                     std::string_view() : pair.substr(eq + 1),
                     true, value))
                 continue;  /* skip pair with invalid escape */
-            query_params.emplace_back(std::move(key), std::move(value));
+            query_seq.emplace_back(std::move(key), std::move(value));
+            query_map[key] = std::prev(query_seq.end());
         }
 
         if (amp == std::string::npos)
@@ -226,15 +225,13 @@ void http_request_msg::ParseQueryParams()
     }
 }
 
-const std::string *http_request_msg::GetQueryParam(
-        std::string_view name)
+std::string http_request_msg::GetQueryParam(const std::string &key) const
 {
-    ParseQueryParams();
-
-    for (const auto &[key, value] : query_params)
-        if (key == name)
-            return &value;
-    return nullptr;
+    if (query_map.find(key) != query_map.end()) {
+        return query_map.at(key)->second;
+    } else {
+        return "";
+    }
 }
 
 bool http_request_msg::WantKeepAlive() const

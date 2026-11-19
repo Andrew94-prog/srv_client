@@ -92,8 +92,7 @@ public:
     const std::string &GetVersion() const { return version; }
     const std::string &GetHost() const { return host; }
     const std::string &GetPath() const { return path; }
-    const std::string &GetQuery() const { return query; }
-    const std::string *GetQueryParam(std::string_view name);
+    const std::string &GetQuery() const { return query_s; }
     HTTP_STATUS GetErrorCode() const { return error_code; }
     bool IsOk() const { return error_code == HTTP_STATUS_OK; }
     bool WantKeepAlive() const;
@@ -101,6 +100,9 @@ public:
 
     void ParseRequestHeader(std::string_view buf);
     response_ptr_t ServeRequest();
+
+    using query_t = std::pair<std::string, std::string>;
+    using query_iterator_t = std::vector<query_t>::iterator;
 
     /* 
      * Description of each supported http method: factory for
@@ -125,17 +127,18 @@ protected:
     std::string host;     /* value of 'host' header field of request */
     std::string path;     /* request target path: percent-decoded,
                              normalized, without query string */
-    std::string query;    /* raw query string of request target,
+    std::string query_s;  /* raw query string of request target,
                              without leading '?' */
     HTTP_STATUS error_code;  /* response error code */
 
-    std::vector<std::pair<std::string, std::string>> query_params;
-    bool query_parsed;
+    std::vector<query_t> query_seq;
+    std::unordered_map<std::string, query_iterator_t> query_map;
 
     void ParseTarget();
     void ParseQueryParams();
     bool PercentDecode(std::string_view in, bool plus_as_space,
                         std::string &out);
+    std::string GetQueryParam(const std::string &name) const;
 
     void SetErrorCode(HTTP_STATUS code) { error_code = code; }
 
