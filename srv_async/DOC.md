@@ -219,15 +219,22 @@ Parameters:
 
 Description:
 Main function of every worker process (each forked child runs exactly this).
-Blocks SIGIO, installs its own SIGINT handler, opens the database connection
-(`open_srv_db()`), initializes the connection queue and context cache, and
-configures the listening socket (non-blocking mode, epoll registration,
-`listen()`). Then runs the infinite scheduling loop: waits for incoming
-connections with `epoll_pwait()` (timeout 0 while there are active
-connections, -1 otherwise), accepts a new connection and creates a coroutine
-for it (`create_new_conn()`), then iterates the whole connection queue
-resuming each coroutine (`swap_to_conn_ctx()`) and freeing completed ones.
-Once per second prints the number of connections handled in the last second.
+Blocks SIGIO outside of `epoll_pwait()` (which is called with an empty wait
+mask, so SIGIO is unblocked during the waiting), installs its own SIGINT
+handler and an empty SIGIO handler without SA_RESTART — readiness of the
+signal-driven client sockets interrupts `epoll_pwait()` with EINTR and wakes
+up the scheduler. Opens the database connection (`open_srv_db()`),
+initializes the connection queue and context cache, and configures the
+listening socket (non-blocking mode, epoll registration, `listen()`). Then
+runs the infinite scheduling loop: waits for incoming connections with
+`epoll_pwait()` (timeout 0 while there are active connections, -1
+otherwise), accepts a new connection and creates a coroutine for it
+(`create_new_conn()`), then iterates the whole connection queue resuming
+each coroutine (`swap_to_conn_ctx()`) and freeing completed ones. An EINTR
+return of `epoll_pwait()` (SIGIO from a client socket) is tolerated and
+leads to the same iteration over the connection queue, so coroutines parked
+on EAGAIN are resumed when their data arrive. Once per second prints the
+number of connections handled in the last second.
 
 Return value: none (function never returns; errors terminate the process).
 
@@ -243,6 +250,28 @@ code 128 + sig, so the parent's `wait_for_workers()` reports the termination
 in a standard way.
 
 Return value: none (the process exits).
+
+## `static void sigio_handler(int sig)` — internal (srv_routines.c)
+
+Parameters:
+- `sig` — number of the received signal (SIGIO)
+
+Description:
+Empty SIGIO handler of worker processes, installed by
+`handle_connections_routine()` via `sigaction()` without SA_RESTART.
+Client sockets work in signal-driven mode (`O_ASYNC` + `F_SETSIG` in
+`set_nonblock()`), so the kernel raises SIGIO when socket data arrive;
+SIGIO is blocked everywhere except inside `epoll_pwait()`, whose wait mask
+is empty. Running of the handler interrupts `epoll_pwait()` with EINTR,
+and the scheduling loop then resumes the coroutines parked on EAGAIN —
+without the handler the signal would be silently ignored (previously
+SIG_IGN) and connections waiting for the rest of a large request body
+would hang forever. The handler body is intentionally empty: the signal
+carries no information needed by the server, only the wake-up matters.
+Absence of SA_RESTART is essential — with it the interrupted
+`epoll_pwait()` would be restarted and the wake-up would be lost.
+
+Return value: none.
 
 # srv_conn_ctxt.h
 

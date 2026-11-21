@@ -25,6 +25,11 @@ static void sigint_handler(int sig)
     exit(128 + sig);
 }
 
+/* Empty handler: SIGIO only interrupts waiting in epoll_pwait() */
+static void sigio_handler(int sig)
+{
+}
+
 void handle_one_connection(void)
 {
     LOG(LOG_INFO1, "start conn_sock = %d, conn = %p\n",
@@ -68,12 +73,19 @@ void handle_connections_routine(int srv_sock)
     int epoll_timeout, epoll_fd;
     time_t all_start, all_end;
     conn_t *conn, *conn_n;
+    struct sigaction sigio_act;
 
-    /* Block SIGIO signal for waiting it via sigwait */
+    /* SIGIO is blocked everywhere except inside epoll_pwait(),
+     * which is called with empty wait mask: readiness of
+     * signal-driven client sockets interrupts waiting with EINTR
+     * and wakes up the scheduler */
     sigemptyset(&sig_block);
     sigaddset(&sig_block, SIGIO);
     sigprocmask(SIG_BLOCK, &sig_block, NULL);
-    signal(SIGIO, SIG_IGN);
+    sigemptyset(&sigio_act.sa_mask);
+    sigio_act.sa_flags = 0;
+    sigio_act.sa_handler = sigio_handler;
+    sigaction(SIGIO, &sigio_act, NULL);
     sigemptyset(&sig_wait);
 
     /*
