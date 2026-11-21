@@ -3,6 +3,7 @@
 ### 1. Key properties
 - Server supports GET/HEAD/POST/PUT/DELETE/PATCH methods
 - Server works directly with clients, no proxy mode
+- Server supports multiple users with authorization
 
 ### 2. Brief description of sources
 
@@ -25,6 +26,12 @@
 - Use C++ code style in `*.cpp` files for handling of http messages. Exceptions:
     - Calling function from *.c source in *.cpp source.
     - Use LOG macros for printing debug messages
+
+### 4. Program stack
+
+- MySQL server for databases, MySQL Connector/C++
+- nlohmann-json3-dev for json
+- libxml++ for html
 
 ### 4. Standard requirements
 

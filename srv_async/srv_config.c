@@ -11,18 +11,8 @@
 
 srv_config_t SRV_CONFIG;
 
-const char HELP_MSG[] = "Supported cmdline options for server:\n"
-                  "-w ('num_workers') NUM_WORKERS - number of worker processes "
-                  "to create, should be from 1 to 1000\n"
-                  "-p ('port') PORT_NUM - port number to listen on server, "
-                  "should be from 1 to 65536 (max valid port)\n"
-                  "-f ('log_file') path_to_log_file - file for reporting errors "
-                  "and info\n"
-                  "-l ('log_level') log_level - verbosity of info prints in log\n"
-                  "-h - get this help\n";
-
 static int parse_range_value(const char *val_str, int *val, int min, int max,
-                            const char *p_name, bool is_config)
+                            const char *p_name)
 {
     int tmp;
 
@@ -30,9 +20,7 @@ static int parse_range_value(const char *val_str, int *val, int min, int max,
     if (tmp < min || tmp > max) {
         fprintf(stderr, "%s(): invalid value %d for '%s' "
                 "in %s, should be in range [%d-%d]\n",
-                __func__, tmp, p_name,
-                is_config ? SRV_CONFIG_FILE : "cmdline",
-                min, max);
+                __func__, tmp, p_name, SRV_CONFIG_FILE, min, max);
         return -ERANGE;
     }
 
@@ -41,14 +29,13 @@ static int parse_range_value(const char *val_str, int *val, int min, int max,
     return 0;
 }
 
-static int parse_log_file_name(const char *val_str, bool is_config)
+static int parse_log_file_name(const char *val_str)
 {
     SRV_CONFIG.log_file_name = (char *) malloc(strlen(val_str) + 1);
     if (!SRV_CONFIG.log_file_name) {
         fprintf(stderr, "%s(): could not allocate %ld bytes for "
                 "log_file name %s in %s\n", __func__,
-                strlen(val_str) + 1, val_str,
-                is_config ? SRV_CONFIG_FILE : "cmdline");
+                strlen(val_str) + 1, val_str, SRV_CONFIG_FILE);
         return -ENOMEM;
     }
 
@@ -57,8 +44,7 @@ static int parse_log_file_name(const char *val_str, bool is_config)
 
     if (!SRV_CONFIG.log_file_desc) {
         fprintf(stderr, "%s(): could not open 'log_file'=%s "
-                "from %s: %s\n", __func__, val_str,
-                is_config ? SRV_CONFIG_FILE : "cmdline",
+                "from %s: %s\n", __func__, val_str, SRV_CONFIG_FILE,
                 strerror(errno));
         return -errno;
     }
@@ -66,48 +52,70 @@ static int parse_log_file_name(const char *val_str, bool is_config)
     return 0;
 }
 
-int parse_srv_cmdline_opts(int argc, char *argv[])
+/* Allocate copy of val_str and store it in *dst.
+ * Value is replaced if parameter was already set */
+static int parse_string_value(const char *val_str, char **dst,
+                              const char *p_name)
 {
-    int c, val, ret;
+    char *tmp;
 
-    while ((c = getopt(argc, argv, "w:p:f:l:h")) != -1) {
-        switch (c) {
-        case 'w':
-            ret = parse_range_value(optarg, &val, 1, MAX_NUM_WORKERS,
-                                    "num_workers", false);
-            if (ret)
-                return ret;
-
-            SRV_CONFIG.num_workers = val;
-            break;
-        case 'p':
-            ret = parse_range_value(optarg, &val, 1, 65535, "port", false);
-            if (ret)
-                return ret;
-
-            SRV_CONFIG.port = val;
-            break;
-        case 'f':
-            ret = parse_log_file_name(optarg, false);
-            if (ret)
-                return ret;
-            break;
-        case 'l':
-            ret = parse_range_value(optarg, &val, LOG_ERROR, LOG_INFO2,
-                                    "log_level", false);
-            if (ret)
-                return ret;
-
-            SRV_CONFIG.log_level = val;
-            break;
-        case 'h':
-            SRV_CONFIG.help = true;
-            break;
-        default:
-            SRV_CONFIG.help = true;
-            return -EINVAL;
-        }
+    tmp = (char *) malloc(strlen(val_str) + 1);
+    if (!tmp) {
+        fprintf(stderr, "%s(): could not allocate %ld bytes for "
+                "'%s' in %s\n", __func__, strlen(val_str) + 1,
+                p_name, SRV_CONFIG_FILE);
+        return -ENOMEM;
     }
+
+    strcpy(tmp, val_str);
+    free(*dst);
+    *dst = tmp;
+
+    return 0;
+}
+
+/* Parse 'base_dir' parameter: store copy of val_str in
+ * SRV_CONFIG.base_dir. Relative path is prepended with server's
+ * current working directory, absolute path is stored as is.
+ * Value is replaced if parameter was already set */
+static int parse_base_dir(const char *val_str)
+{
+    char *val, *cwd = NULL;
+    size_t len;
+
+    if (val_str[0] != '/') {
+        cwd = getcwd(NULL, 0);
+        if (cwd == NULL) {
+            fprintf(stderr, "%s(): could not get current working "
+                    "directory: %s\n", __func__, strerror(errno));
+            return -errno;
+        }
+
+        /* current dir + '/' + relative base_dir + '\0' */
+        len = strlen(cwd) + 1 + strlen(val_str) + 1;
+        val = (char *) malloc(len);
+        if (val == NULL) {
+            free(cwd);
+            fprintf(stderr, "%s(): could not allocate %ld bytes for "
+                    "'base_dir' in %s\n", __func__, len,
+                    SRV_CONFIG_FILE);
+            return -ENOMEM;
+        }
+        snprintf(val, len, "%s/%s", cwd, val_str);
+        free(cwd);
+    } else {
+        val = (char *) malloc(strlen(val_str) + 1);
+        if (val == NULL) {
+            fprintf(stderr, "%s(): could not allocate %ld bytes for "
+                    "'base_dir' in %s\n", __func__,
+                    strlen(val_str) + 1, SRV_CONFIG_FILE);
+            return -ENOMEM;
+        }
+        strcpy(val, val_str);
+    }
+
+    free(SRV_CONFIG.base_dir);
+    SRV_CONFIG.base_dir = val;
 
     return 0;
 }
@@ -152,30 +160,70 @@ static int parse_srv_config_line(char *line)
         return 0;
 
     if (strcmp(key, "port") == 0) {
-        ret = parse_range_value(val_str, &val, 1, 65535,
-                                "port", true);
+        ret = parse_range_value(val_str, &val, 1, 65535, "port");
         if (ret)
             return ret;
 
         SRV_CONFIG.port = val;
     } else if (strcmp(key, "num_workers") == 0) {
         ret = parse_range_value(val_str, &val, 1, MAX_NUM_WORKERS,
-                                "num_workers", true);
+                                "num_workers");
         if (ret)
             return ret;
 
         SRV_CONFIG.num_workers = val;
     } else if (strcmp(key, "log_file") == 0) {
-        ret = parse_log_file_name(val_str, true);
+        ret = parse_log_file_name(val_str);
         if (ret)
             return ret;
     } else if (strcmp(key, "log_level") == 0) {
         ret = parse_range_value(val_str, &val, LOG_ERROR, LOG_INFO2,
-                                "log_level", true);
+                                "log_level");
         if (ret)
             return ret;
 
         SRV_CONFIG.log_level = val;
+    } else if (strcmp(key, "base_dir") == 0) {
+        ret = parse_base_dir(val_str);
+        if (ret)
+            return ret;
+    } else if (strcmp(key, "host_name") == 0) {
+        ret = parse_string_value(val_str, &SRV_CONFIG.host_name,
+                                 "host_name");
+        if (ret)
+            return ret;
+    } else if (strcmp(key, "db_socket") == 0) {
+        ret = parse_string_value(val_str, &SRV_CONFIG.db_socket,
+                                 "db_socket");
+        if (ret)
+            return ret;
+    } else if (strcmp(key, "db_name") == 0) {
+        ret = parse_string_value(val_str, &SRV_CONFIG.db_name,
+                                 "db_name");
+        if (ret)
+            return ret;
+    } else if (strcmp(key, "db_user") == 0) {
+        ret = parse_string_value(val_str, &SRV_CONFIG.db_user,
+                                 "db_user");
+        if (ret)
+            return ret;
+    } else if (strcmp(key, "db_password") == 0) {
+        ret = parse_string_value(val_str, &SRV_CONFIG.db_password,
+                                 "db_password");
+        if (ret)
+            return ret;
+    }
+
+    return 0;
+}
+
+/* Check that base_dir path is accessible for read and write */
+int validate_srv_base_dir(const char *path)
+{
+    if (access(path, R_OK | W_OK) != 0) {
+        fprintf(stderr, "%s(): base_dir '%s' is not accessible for "
+                "read and write: %s\n", __func__, path, strerror(errno));
+        return -EACCES;
     }
 
     return 0;

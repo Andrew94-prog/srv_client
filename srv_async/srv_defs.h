@@ -18,9 +18,16 @@
 #define MAX_NUM_WORKERS		1000
 #define DEFAULT_SRV_PORT	8080
 #define DEFAULT_NUM_WORKERS	1
+#define DEFAULT_BASE_DIR	"public"
+#define DEFAULT_HOST_NAME	"example.com"
+#define DEFAULT_DB_SOCKET	"unix:///var/run/mysqld/mysqld.sock"
+#define DEFAULT_DB_NAME		"example_db"
+#define DEFAULT_DB_USER		"example"
+#define DEFAULT_DB_PASSWORD	"example"
 #define SRV_CONFIG_FILE		"srv.config"
 #define MIN_CONN_CTX_CACHE_CNT	50
 #define MAX_CONN_CTX_CACHE_CNT	300
+#define FS_ACCESS_BLOCK_SIZE	(1024UL * 1024 * 5)
 
 #define TIMEOUT_INF ((time_t) -1)
 #define CLIENT_OP_TIMEOUT 5000000000

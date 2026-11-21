@@ -14,6 +14,7 @@
 #include "http/srv_http_send_recv.h"
 #include "srv_qlist.h"
 #include "srv_config.h"
+#include "libdb/srv_db.h"
 
 static unsigned long n_conn = 0;
 static unsigned long prev_n_conn = 0;
@@ -81,6 +82,12 @@ void handle_connections_routine(int srv_sock)
      * main process and flush all prints to log file
      */
     signal(SIGINT, sigint_handler);
+
+    /* Open connection with database before any other actions */
+    if (open_srv_db()) {
+        LOG(LOG_ERROR, "could not open connection with database");
+        exit(EXIT_FAILURE);
+    }
 
     /* Init connection queue struct for current server process */
     init_conn_queue();

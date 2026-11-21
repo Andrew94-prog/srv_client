@@ -95,7 +95,7 @@ std::shared_ptr<http_request_msg> recv_http_msg()
     }
 
     std::string_view method = get_method_token(http_hdr);
-    std::shared_ptr<http_request_msg> req = http_request_msg::Create(method);
+    request_ptr_t req = http_request_msg::Create(method);
     if (req->IsOk())
         req->ParseRequestHeader(http_hdr);
 
@@ -177,7 +177,7 @@ bool handle_one_client_request()
         req->GetVersion().c_str());
     LOG(LOG_INFO2, "%s\n", req->Serialize().c_str());
 
-    std::shared_ptr<http_response_msg> resp = req->MakeResponse();
+    std::shared_ptr<http_response_msg> resp = req->ServeRequest();
     if (send_http_msg(resp) <= 0) {
         LOG(LOG_ERROR, "failed to send response to client"
             " conn_sock = %d, conn = %p\n",
@@ -187,8 +187,8 @@ bool handle_one_client_request()
 
     LOG(LOG_INFO1, "sent request to client conn_sock = %d, conn = %p\n",
         curr_conn_sock(), curr_conn());
-    LOG(LOG_INFO1, "response: code = %d, %s\n", static_cast<int>(resp->status_code),
-        resp->status_text.c_str());
+    LOG(LOG_INFO1, "response: code = %d, %s\n", resp->GetStatusCode(),
+        resp->GetStatusText().c_str());
     LOG(LOG_INFO2, "%s\n", resp->Serialize().c_str());
 
     if (!req->WantKeepAlive()) {
