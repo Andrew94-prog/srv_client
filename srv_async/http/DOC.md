@@ -658,8 +658,10 @@ Return value: 501 response with explanatory body.
 
 ## class http_request_post_msg : public http_request_msg
 
-Class of POST requests. The method is recognized and parsed by the common
-code (including the request body), but serving is not implemented yet.
+Class of POST requests: storing of the received body in the file with the
+path of the request target (created or replaced) under the base directory.
+Also the base class for `http_request_put_msg`, which reuses the same
+routing and differs only in response status codes.
 
 ### `response_ptr_t ServeMethodRequest()` — public, override
 
@@ -667,17 +669,51 @@ Parameters:
 - none
 
 Description:
-Plug serving of a POST request. Requests addressed to another host are
-rejected with 403 "Forbidden" — the server is not a proxy. Otherwise returns
-501 with a body stating that handling of POST requests will be implemented
-in the next version. The received body is not used yet.
+Routing of a POST request. For a foreign host: 403 "Forbidden" — the server
+is not a proxy. For this host: paths starting with "/api/" go to
+`ServeApiRequest()`, the rest to `ServeFileRequest()`. Unlike GET/HEAD the
+path "/" is not extended to "/index.html": for write methods the root is
+the base directory itself and such requests end with the 409 response of
+`ServeFileRequest()`.
 
-Return value: 403 or 501 response.
+Return value: response for the POST request (403 / 409 / 500 / 200).
 
-## class http_request_put_msg : public http_request_msg
+### `response_ptr_t ServeFileRequest()` — protected
 
-Class of PUT requests. The method is recognized and parsed by the common
-code (including the request body), but serving is not implemented yet.
+Parameters:
+- none (operates on the parsed request path and the received body)
+
+Description:
+Stores the request body as a file. First the additional modification check:
+the target path must be inside "/storage/" — files outside it (including
+"/" and "/static/") are read-only for POST/PUT/DELETE, such requests get
+403 "Forbidden". Then builds `SRV_CONFIG.base_dir` + path and checks it
+with libfs helpers. The target must not be an existing directory and the
+parent directory must already exist (it is not created by the request) —
+otherwise 409 "Conflict". `upload_file()` writes the body (chunked writing
+yielding to the scheduler); a write failure yields 500. On success returns
+200 with a body reporting the request path, whether the file was created
+or replaced and the number of stored bytes.
+
+Return value: ready response (200, 409 or 500).
+
+### `response_ptr_t ServeApiRequest()` — protected
+
+Parameters:
+- none (operates on the parsed request path)
+
+Description:
+Plug handler for requests to the "/api/" part: returns 501 "Not
+Implemented", since the api interface requires the database. Future api
+handlers will be dispatched here.
+
+Return value: 501 response.
+
+## class http_request_put_msg : public http_request_post_msg
+
+Class of PUT requests: same routing and file storing logic as POST
+(inherited), but with the standard status codes for resource storage —
+201 for a newly created file and 204 for a replaced one.
 
 ### `response_ptr_t ServeMethodRequest()` — public, override
 
@@ -685,17 +721,33 @@ Parameters:
 - none
 
 Description:
-Plug serving of a PUT request. Requests to another host are rejected with
-403 "Forbidden". Otherwise returns 501 with a body stating that handling of
-PUT requests will be implemented in the next version (intended use:
-uploading files under the base directory).
+Routing of a PUT request, mirroring the POST version: 403 for a foreign
+host, "/api/" paths to the inherited `ServeApiRequest()`, the rest to the
+PUT version of `ServeFileRequest()`.
 
-Return value: 403 or 501 response.
+Return value: response for the PUT request (403 / 409 / 500 / 201 / 204).
+
+### `response_ptr_t ServeFileRequest()` — private
+
+Parameters:
+- none (operates on the parsed request path and the received body)
+
+Description:
+Same validation and writing as the POST implementation: the modification
+check allows only paths inside "/storage/" (403 otherwise), the target is
+not a directory, the parent directory exists — else 409; `upload_file()`
+failure — 500. On success with a replaced existing file returns 204 "No
+Content" without body; for a newly created file returns 201 "Created" with
+a "Location" header pointing at the request path and a body naming the
+created file.
+
+Return value: ready response (201, 204, 409 or 500).
 
 ## class http_request_delete_msg : public http_request_msg
 
-Class of DELETE requests. The method is recognized and parsed by the common
-code; DELETE requests cannot carry a body.
+Class of DELETE requests: removal of the file with the path of the request
+target from the base directory. DELETE requests cannot carry a body, and
+only regular files are removed — directories are not affected.
 
 ### `response_ptr_t ServeMethodRequest()` — public, override
 
@@ -703,12 +755,38 @@ Parameters:
 - none
 
 Description:
-Plug serving of a DELETE request. Requests to another host are rejected with
-403 "Forbidden". Otherwise returns 501 with a body stating that handling of
-DELETE requests will be implemented in the next version (intended use:
-removing files under the base directory).
+Routing of a DELETE request: 403 for a foreign host, "/api/" paths go to
+`ServeApiRequest()`, the rest to `ServeFileRequest()`.
 
-Return value: 403 or 501 response.
+Return value: response for the DELETE request (403 / 404 / 500 / 204).
+
+### `response_ptr_t ServeFileRequest()` — protected
+
+Parameters:
+- none (operates on the parsed request path)
+
+Description:
+Removes the file. First the additional modification check: the target path
+must be inside "/storage/" — deletion of files outside it (including "/"
+and "/static/") is forbidden with 403. Then builds `SRV_CONFIG.base_dir` +
+path and checks it with `file_access_ok()` (libfs). A path that is not an
+existing regular file (including directories and the root "/") yields 404;
+`remove_file()` failure yields 500. On success returns 204 "No Content"
+without body.
+
+Return value: ready response (204, 404 or 500).
+
+### `response_ptr_t ServeApiRequest()` — protected
+
+Parameters:
+- none (operates on the parsed request path)
+
+Description:
+Plug handler for requests to the "/api/" part: returns 501 "Not
+Implemented", since the api interface requires the database. Future api
+handlers will be dispatched here.
+
+Return value: 501 response.
 
 ## class http_request_patch_msg : public http_request_msg
 

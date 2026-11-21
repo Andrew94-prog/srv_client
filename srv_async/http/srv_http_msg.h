@@ -16,17 +16,20 @@ class http_response_msg;
 
 enum HTTP_STATUS {
     HTTP_STATUS_OK = 200,
+    HTTP_STATUS_CREATED = 201,
+    HTTP_STATUS_NO_CONTENT = 204,
     HTTP_STATUS_BAD_REQUEST = 400,
     HTTP_STATUS_FORBIDDEN = 403,
     HTTP_STATUS_NOT_FOUND = 404,
     HTTP_STATUS_METHOD_NOT_ALLOWED = 405,
     HTTP_STATUS_REQUEST_TIMEOUT = 408,
+    HTTP_STATUS_CONFLICT = 409,
     HTTP_STATUS_LENGTH_REQUIRED = 411,
     HTTP_STATUS_PAYLOAD_TOO_LARGE = 413,
     HTTP_STATUS_INTERNAL_SERVER_ERROR = 500,
     HTTP_STATUS_NOT_IMPLEMENTED = 501,
     HTTP_STATUS_HEADER_FIELDS_TOO_LARGE = 431,
-    HTTP_STATUS_MAX = 432
+    HTTP_STATUS_MAX = 502
 };
 
 extern const std::string HTTP_CRLF;
@@ -169,16 +172,27 @@ private:
 class http_request_post_msg : public http_request_msg {
 public:
     response_ptr_t ServeMethodRequest() override;
+
+protected:
+    response_ptr_t ServeFileRequest();
+    response_ptr_t ServeApiRequest();
 };
 
-class http_request_put_msg : public http_request_msg {
+class http_request_put_msg : public http_request_post_msg {
 public:
     response_ptr_t ServeMethodRequest() override;
+
+private:
+    response_ptr_t ServeFileRequest();
 };
 
 class http_request_delete_msg : public http_request_msg {
 public:
     response_ptr_t ServeMethodRequest() override;
+
+protected:
+    response_ptr_t ServeFileRequest();
+    response_ptr_t ServeApiRequest();
 };
 
 class http_request_patch_msg : public http_request_msg {

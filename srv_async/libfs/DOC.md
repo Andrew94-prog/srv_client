@@ -8,9 +8,9 @@ is in `srv_fs.cpp` (uses `std::filesystem` and file streams).
 # libfs/srv_fs.h
 
 Interface of the file-system helper library, used by the http layer when
-serving static files (HEAD/GET) and, in future versions, when handling
-uploads (PUT) and deletions (DELETE). All functions operate on absolute
-paths — callers build them as `SRV_CONFIG.base_dir` + request path.
+serving static files (HEAD/GET), handling uploads (POST/PUT) and deletions
+(DELETE). All functions operate on absolute paths — callers build them as
+`SRV_CONFIG.base_dir` + request path.
 
 ## `bool dir_access_ok(const std::string &dpath)`
 
@@ -77,6 +77,22 @@ Description:
 Writes the content into the file (created or truncated, binary mode) in
 blocks of at most `FS_ACCESS_BLOCK_SIZE`, yielding to the scheduler after
 each block — the counterpart of the chunked reading in `download_file()`.
-Intended for future PUT request handling.
+Used by POST/PUT request handling to store the request body as a file.
 
 Return value: 0 on success, -1 if the file cannot be opened for writing.
+
+## `int remove_file(const std::string &fpath)`
+
+Parameters:
+- `fpath` — absolute path of the file to remove
+
+Description:
+Deletes the file via `std::filesystem::remove()` with an error code (no
+exceptions). Used by DELETE request handling. Removal of directories is not
+supported: `remove()` on a non-empty directory fails, and the http layer
+calls this function only for paths checked by `file_access_ok()` — callers
+are expected to do the same check. A single unlink needs no block-wise
+cooperation with the scheduler.
+
+Return value: 0 on success, -1 if nothing was removed (no such file) or
+the removal failed.

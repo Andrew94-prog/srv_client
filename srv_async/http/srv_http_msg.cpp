@@ -14,13 +14,17 @@
 
 const std::string HTTP_CRLF = "\r\n";
 const std::vector<std::string> HTTP_STATUS_TEXT = [] {
-    std::vector<std::string> text(HTTP_STATUS_HEADER_FIELDS_TOO_LARGE + 1);
+    std::vector<std::string> text(HTTP_STATUS_MAX);
 
     text[HTTP_STATUS_OK] = "OK";
+    text[HTTP_STATUS_CREATED] = "Created";
+    text[HTTP_STATUS_NO_CONTENT] = "No Content";
     text[HTTP_STATUS_BAD_REQUEST] = "Bad Request";
+    text[HTTP_STATUS_FORBIDDEN] = "Forbidden";
     text[HTTP_STATUS_NOT_FOUND] = "Not Found";
     text[HTTP_STATUS_METHOD_NOT_ALLOWED] = "Method Not Allowed";
     text[HTTP_STATUS_REQUEST_TIMEOUT] = "Request Timeout";
+    text[HTTP_STATUS_CONFLICT] = "Conflict";
     text[HTTP_STATUS_LENGTH_REQUIRED] = "Length Required";
     text[HTTP_STATUS_PAYLOAD_TOO_LARGE] = "Payload Too Large";
     text[HTTP_STATUS_INTERNAL_SERVER_ERROR] = "Internal Server Error";

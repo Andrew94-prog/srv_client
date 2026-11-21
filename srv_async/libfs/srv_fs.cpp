@@ -78,3 +78,13 @@ int upload_file(const string &fpath, const string &content)
 
     return 0;
 }
+
+int remove_file(const string &fpath)
+{
+    error_code ec;
+
+    if (!filesystem::remove(fpath, ec) || ec)
+        return -1;
+
+    return 0;
+}

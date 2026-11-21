@@ -37,3 +37,4 @@
 
 - C++20 standard for `*.cpp` files
 - C11 standard for `*.c` files
+- Minimum comments in code, documentation in *.md files
